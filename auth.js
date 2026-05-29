@@ -18,12 +18,17 @@ function authSubtitle(isSetup) {
   return authText(isSetup ? "auth.setupSubtitle" : "auth.subtitle");
 }
 
+function isAutoTeamSyncConfigured() {
+  return typeof CloudSync !== "undefined" && CloudSync.isEnabled();
+}
+
 function authText(key, vars = {}) {
   const zh = {
     "auth.title": "Translation Intern Ops",
     "auth.subtitle": "内部访问验证",
     "auth.setupSubtitle": "首次使用请设置团队访问密码（所有成员共用）",
     "auth.loginSubtitle": "请输入团队访问密码",
+    "auth.loginHint": "同事请使用管理员提供的同一团队密码，无需额外配置。",
     "auth.password": "访问密码",
     "auth.passwordPh": "请输入访问密码",
     "auth.confirmPassword": "确认密码",
@@ -43,6 +48,7 @@ function authText(key, vars = {}) {
     "auth.subtitle": "Internal access required",
     "auth.setupSubtitle": "Set a team access password (shared by all members)",
     "auth.loginSubtitle": "Enter the team access password",
+    "auth.loginHint": "Colleagues use the same team password from your admin. No extra setup needed.",
     "auth.password": "Access password",
     "auth.passwordPh": "Enter access password",
     "auth.confirmPassword": "Confirm password",
@@ -170,6 +176,7 @@ function renderAuthGate(mode = "login") {
             : ""
         }
         <p class="auth-error hidden" id="authError"></p>
+        ${!isSetup && isAutoTeamSyncConfigured() ? `<p class="auth-hint">${authText("auth.loginHint")}</p>` : ""}
         <button type="submit" class="btn-save auth-submit">${authText(isSetup ? "auth.setupSubmit" : "auth.submit")}</button>
       `
       }
@@ -281,19 +288,7 @@ async function initAccessGate() {
   if (isCloudSyncEnabled()) {
     const online = await CloudSync.ping();
     if (!online) {
-      hideAppShell();
-      const gate = document.createElement("div");
-      gate.id = "authGate";
-      gate.className = "auth-gate";
-      gate.innerHTML = `
-        <div class="auth-card auth-card-blocked">
-          <div class="auth-brand">译</div>
-          <h1>${authText("auth.title")}</h1>
-          <p>${authText("auth.cloudUnavailable")}</p>
-        </div>
-      `;
-      document.body.appendChild(gate);
-      return;
+      window.__cloudSyncOffline = true;
     }
   }
 

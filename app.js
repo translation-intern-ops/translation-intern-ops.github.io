@@ -255,19 +255,17 @@ function startCloudPolling(key) {
 }
 
 function mountSyncStatus() {
-  const setupBtn = document.getElementById("openSyncSetupBtn");
-  if (setupBtn) setupBtn.textContent = t("sync.setupBtn");
-  const bannerBtn = document.getElementById("openSyncBannerBtn");
-  if (bannerBtn) bannerBtn.textContent = t("sync.banner.setup");
   void updateSyncStatus();
   updateSyncBanner();
 }
 
 function updateSyncBanner() {
   const banner = document.getElementById("syncBanner");
+  const setupBtn = document.getElementById("openSyncSetupBtn");
   if (!banner) return;
   const enabled = typeof CloudSync !== "undefined" && CloudSync.isEnabled();
   banner.classList.toggle("hidden", enabled);
+  setupBtn?.classList.toggle("hidden", enabled);
   const text = document.getElementById("syncBannerText");
   if (text) text.textContent = t("sync.banner.text");
 }
@@ -1878,6 +1876,9 @@ function startApp() {
     renderAll();
     switchView("dashboard");
     showAppShell();
+    if (window.__cloudSyncOffline) {
+      showToast(t("toast.syncOffline"));
+    }
   };
   launch();
 }

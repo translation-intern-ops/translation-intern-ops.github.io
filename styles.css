@@ -1411,6 +1411,13 @@ button.btn-save:disabled {
   min-height: 42px;
 }
 
+.auth-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .auth-logout-btn {
   min-height: 38px;
   padding: 0 12px;
