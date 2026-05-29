@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-REPO_NAME="${REPO_NAME:-translation-intern-manager}"
+REPO_NAME="${REPO_NAME:-translation-intern-ops}"
 GH_BIN="${GH_BIN:-$ROOT_DIR/.tools/gh_2.93.0_macOS_amd64/bin/gh}"
 
 cd "$ROOT_DIR"

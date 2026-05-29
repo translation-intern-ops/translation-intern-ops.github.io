@@ -5,13 +5,9 @@ const defaultLanguages = [
   { id: "fr", label: "法语", pair: "中法" },
 ];
 
-const STORAGE_KEY = "translation-intern-manager-data";
-const PRODUCT_CENTER_KEY = "translation-intern-manager-product-centers";
-const LANGUAGE_KEY = "translation-intern-manager-languages";
-
 const defaultProductCenters = ["官网", "帮助中心", "活动页", "商家后台", "品牌官网", "开发者平台"];
 
-let languages = loadLanguages();
+let languages = cloneData(defaultLanguages);
 let productCenters = [...defaultProductCenters];
 
 let activeView = "dashboard";
@@ -72,7 +68,7 @@ const defaultState = {
   ],
 };
 
-const state = loadState();
+let state = cloneData(defaultState);
 
 const statusMap = {
   todo: "待分配",
@@ -142,50 +138,51 @@ function normalizeLanguageId(value) {
   return existing?.id ?? "";
 }
 
-function loadLanguages() {
-  try {
-    const savedLanguages = window.localStorage.getItem(LANGUAGE_KEY);
-    if (!savedLanguages) return cloneData(defaultLanguages);
-    const parsed = JSON.parse(savedLanguages);
-    if (!Array.isArray(parsed) || !parsed.length) return cloneData(defaultLanguages);
-    return parsed;
-  } catch {
-    return cloneData(defaultLanguages);
+function applyVaultPayload(payload) {
+  if (!payload) return;
+  const savedState = payload.state ?? {};
+  state.interns = Array.isArray(savedState.interns) ? savedState.interns : cloneData(defaultState.interns);
+  state.tasks = Array.isArray(savedState.tasks) ? savedState.tasks : cloneData(defaultState.tasks);
+  state.maintenance = Array.isArray(savedState.maintenance) ? savedState.maintenance : cloneData(defaultState.maintenance);
+  state.resourceStatus = Array.isArray(savedState.resourceStatus) ? savedState.resourceStatus : cloneData(defaultState.resourceStatus);
+  state.updateLog = Array.isArray(savedState.updateLog) ? savedState.updateLog : cloneData(defaultState.updateLog);
+  state.guides = Array.isArray(savedState.guides) ? savedState.guides : cloneData(defaultState.guides);
+  state.knowledgeLanguageIds = Array.isArray(savedState.knowledgeLanguageIds)
+    ? savedState.knowledgeLanguageIds
+    : cloneData(defaultState.knowledgeLanguageIds);
+  if (Array.isArray(payload.productCenters) && payload.productCenters.length) {
+    productCenters = payload.productCenters;
+  }
+  if (Array.isArray(payload.languages) && payload.languages.length) {
+    languages = payload.languages;
   }
 }
 
-function loadState() {
-  try {
-    const savedState = window.localStorage.getItem(STORAGE_KEY);
-    const savedProductCenters = window.localStorage.getItem(PRODUCT_CENTER_KEY);
-    if (savedProductCenters) {
-      const parsedProducts = JSON.parse(savedProductCenters);
-      if (Array.isArray(parsedProducts) && parsedProducts.length) {
-        productCenters = parsedProducts;
-      }
-    }
-    if (!savedState) return cloneData(defaultState);
-    const parsedState = JSON.parse(savedState);
-    return {
-      interns: Array.isArray(parsedState.interns) ? parsedState.interns : cloneData(defaultState.interns),
-      tasks: Array.isArray(parsedState.tasks) ? parsedState.tasks : cloneData(defaultState.tasks),
-      maintenance: Array.isArray(parsedState.maintenance) ? parsedState.maintenance : cloneData(defaultState.maintenance),
-      resourceStatus: Array.isArray(parsedState.resourceStatus) ? parsedState.resourceStatus : cloneData(defaultState.resourceStatus),
-      updateLog: Array.isArray(parsedState.updateLog) ? parsedState.updateLog : cloneData(defaultState.updateLog),
-      guides: Array.isArray(parsedState.guides) ? parsedState.guides : cloneData(defaultState.guides),
-      knowledgeLanguageIds: Array.isArray(parsedState.knowledgeLanguageIds)
-        ? parsedState.knowledgeLanguageIds
-        : cloneData(defaultState.knowledgeLanguageIds),
-    };
-  } catch {
-    return cloneData(defaultState);
+async function bootstrapSecureData(key) {
+  let payload = await SecureStorage.loadVault(key);
+  if (!payload) {
+    payload = await SecureStorage.migrateLegacyPlaintext(key, {
+      state: cloneData(defaultState),
+      productCenters: [...defaultProductCenters],
+      languages: cloneData(defaultLanguages),
+    });
   }
+  applyVaultPayload(payload);
 }
+
+let persistTimer = null;
 
 function persistData() {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  window.localStorage.setItem(PRODUCT_CENTER_KEY, JSON.stringify(productCenters));
-  window.localStorage.setItem(LANGUAGE_KEY, JSON.stringify(languages));
+  const key = window.__secureStorageKey;
+  if (!key || typeof SecureStorage === "undefined") return;
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(async () => {
+    try {
+      await SecureStorage.saveVault(key, { state, productCenters, languages });
+    } catch {
+      showToast(t("toast.saveFailed"));
+    }
+  }, 120);
 }
 
 function languageName(id) {
@@ -1640,9 +1637,16 @@ $("#knowledgeForm").addEventListener("submit", (event) => {
 });
 
 function startApp() {
-  applyStaticI18n();
-  renderAll();
-  switchView("dashboard");
+  const launch = async () => {
+    if (window.__secureStorageKey) {
+      await bootstrapSecureData(window.__secureStorageKey);
+    }
+    migrateState();
+    applyStaticI18n();
+    renderAll();
+    switchView("dashboard");
+  };
+  launch();
 }
 
 function bootApp() {
