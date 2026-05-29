@@ -2,3 +2,4 @@
 *.zip
 *.backup-*.js
 node_modules/
+.tools/
