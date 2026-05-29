@@ -158,16 +158,37 @@ function applyVaultPayload(payload) {
   }
 }
 
+function defaultPayload() {
+  return {
+    state: cloneData(defaultState),
+    productCenters: [...defaultProductCenters],
+    languages: cloneData(defaultLanguages),
+  };
+}
+
 async function bootstrapSecureData(key) {
-  let payload = await SecureStorage.loadVault(key);
-  if (!payload) {
-    payload = await SecureStorage.migrateLegacyPlaintext(key, {
-      state: cloneData(defaultState),
-      productCenters: [...defaultProductCenters],
-      languages: cloneData(defaultLanguages),
-    });
+  const payload = await SecureStorage.loadVault(key);
+  if (payload) {
+    applyVaultPayload(payload);
+    return;
   }
-  applyVaultPayload(payload);
+
+  if (SecureStorage.hasLegacyPlaintext()) {
+    applyVaultPayload(await SecureStorage.migrateLegacyPlaintext(key, defaultPayload()));
+    return;
+  }
+
+  const hasEncryptedVault = SecureStorage.hasVaultLocal() || (await SecureStorage.hasRemoteVault());
+  if (hasEncryptedVault) {
+    showToast(t("toast.loadFailed"));
+    sessionStorage.removeItem("translation-intern-manager-auth");
+    window.__secureStorageKey = null;
+    setTimeout(() => window.location.reload(), 1500);
+    return;
+  }
+
+  applyVaultPayload(defaultPayload());
+  await SecureStorage.saveVault(key, { state, productCenters, languages });
 }
 
 let syncPollTimer = null;
@@ -190,19 +211,42 @@ function startCloudPolling(key) {
 }
 
 let persistTimer = null;
+let persistInFlight = null;
+
+async function persistDataNow() {
+  const key = window.__secureStorageKey;
+  if (!key || typeof SecureStorage === "undefined") return;
+  clearTimeout(persistTimer);
+  persistTimer = null;
+  persistInFlight = SecureStorage.saveVault(key, { state, productCenters, languages }).catch(() => {
+    showToast(t("toast.saveFailed"));
+  });
+  await persistInFlight;
+  persistInFlight = null;
+}
 
 function persistData() {
   const key = window.__secureStorageKey;
   if (!key || typeof SecureStorage === "undefined") return;
   clearTimeout(persistTimer);
-  persistTimer = setTimeout(async () => {
-    try {
-      await SecureStorage.saveVault(key, { state, productCenters, languages });
-    } catch {
-      showToast(t("toast.saveFailed"));
-    }
-  }, 120);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    persistDataNow();
+  }, 80);
 }
+
+function flushPersistData() {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+    void persistDataNow();
+    return;
+  }
+  if (persistInFlight) return;
+}
+
+window.addEventListener("pagehide", flushPersistData);
+window.addEventListener("beforeunload", flushPersistData);
 
 function languageName(id) {
   const lang = languages.find((item) => item.id === id);

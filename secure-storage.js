@@ -180,6 +180,7 @@ const SecureStorage = {
       v: 1,
       iv: b64(iv),
       data: b64(new Uint8Array(ciphertext)),
+      savedAt: new Date().toISOString(),
     };
   },
 
@@ -217,33 +218,70 @@ const SecureStorage = {
     this.clearLegacyPlaintext();
   },
 
+  async hasRemoteVault() {
+    if (typeof CloudSync === "undefined" || !CloudSync.isEnabled()) return false;
+    try {
+      const row = await CloudSync.fetchRow();
+      return Boolean(row?.vault);
+    } catch {
+      return false;
+    }
+  },
+
+  async tryDecryptLocalVault(key) {
+    const raw = localStorage.getItem(VAULT_KEY);
+    if (!raw) return null;
+    try {
+      const envelope = JSON.parse(raw);
+      return { envelope, payload: await this.decryptPayload(key, envelope) };
+    } catch {
+      return null;
+    }
+  },
+
   async saveVault(key, payload) {
     const envelope = await this.encryptPayload(key, payload);
     this.writeVaultLocal(envelope);
     if (typeof CloudSync !== "undefined" && CloudSync.isEnabled()) {
-      this.lastRemoteUpdatedAt = (await CloudSync.saveVaultEnvelope(envelope)) ?? this.lastRemoteUpdatedAt;
+      try {
+        this.lastRemoteUpdatedAt = (await CloudSync.saveVaultEnvelope(envelope)) ?? this.lastRemoteUpdatedAt;
+      } catch {
+        /* keep local copy even if cloud sync fails */
+      }
     }
+    return envelope;
   },
 
   async loadVault(key) {
-    if (typeof CloudSync !== "undefined" && CloudSync.isEnabled()) {
-      try {
-        const row = await CloudSync.fetchRow();
-        if (row?.vault) {
-          this.lastRemoteUpdatedAt = row.updated_at ?? "";
-          this.writeVaultLocal(row.vault);
-          return await this.decryptPayload(key, row.vault);
-        }
-      } catch {
-        /* fall back to local cache */
-      }
+    const local = await this.tryDecryptLocalVault(key);
+
+    if (typeof CloudSync === "undefined" || !CloudSync.isEnabled()) {
+      return local?.payload ?? null;
     }
-    const raw = localStorage.getItem(VAULT_KEY);
-    if (!raw) return null;
+
     try {
-      return await this.decryptPayload(key, JSON.parse(raw));
+      const row = await CloudSync.fetchRow();
+      const remoteEnvelope = row?.vault;
+      if (!remoteEnvelope) return local?.payload ?? null;
+
+      let remotePayload = null;
+      try {
+        remotePayload = await this.decryptPayload(key, remoteEnvelope);
+      } catch {
+        return local?.payload ?? null;
+      }
+
+      const remoteSavedAt = remoteEnvelope.savedAt ?? row.updated_at ?? "";
+      const localSavedAt = local?.envelope?.savedAt ?? "";
+      this.lastRemoteUpdatedAt = row.updated_at ?? "";
+
+      if (!local?.payload || remoteSavedAt > localSavedAt) {
+        this.writeVaultLocal(remoteEnvelope);
+        return remotePayload;
+      }
+      return local.payload;
     } catch {
-      return null;
+      return local?.payload ?? null;
     }
   },
 
