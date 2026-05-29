@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>翻译实习生管理系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">译</div>
+          <div>
+            <strong data-i18n="brand.title">翻译实习生管理</strong>
+            <span data-i18n="brand.subtitle">Translation Intern Ops</span>
+          </div>
+        </div>
+        <nav class="nav-list" data-i18n-aria="nav.main">
+          <button class="nav-item active" data-view="dashboard" data-i18n-title="nav.dashboardTitle">
+            <span aria-hidden="true">⌂</span><b data-i18n="nav.dashboard">概览</b>
+          </button>
+          <button class="nav-item" data-view="tasks" data-i18n-title="nav.tasksTitle">
+            <span aria-hidden="true">▦</span><b data-i18n="nav.tasks">任务</b>
+          </button>
+          <button class="nav-item" data-view="interns" data-i18n-title="nav.internsTitle">
+            <span aria-hidden="true">👥</span><b data-i18n="nav.interns">实习生</b>
+          </button>
+          <button class="nav-item" data-view="knowledge" data-i18n-title="nav.knowledgeTitle">
+            <span aria-hidden="true">◇</span><b data-i18n="nav.knowledge">知识库</b>
+          </button>
+          <button class="nav-item" data-view="reports" data-i18n-title="nav.reportsTitle">
+            <span aria-hidden="true">↗</span><b data-i18n="nav.reports">仪表盘</b>
+          </button>
+          <button class="nav-item" data-view="guides" data-i18n-title="nav.guidesTitle">
+            <span aria-hidden="true">◎</span><b data-i18n="nav.guides">新手指南</b>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" data-i18n="topbar.eyebrow">实习生培养 · 翻译交付 · 本地化维护</p>
+            <h1 id="pageTitle">概览</h1>
+          </div>
+          <div class="toolbar">
+            <div class="language-tabs ui-locale-tabs" id="uiLocaleTabs" role="group" data-i18n-aria="uiLocale.label">
+              <button type="button" data-ui-locale="zh" class="active" data-i18n="uiLocale.zh">中文</button>
+              <button type="button" data-ui-locale="en" data-i18n="uiLocale.en">English</button>
+            </div>
+            <label class="search">
+              <span aria-hidden="true">⌕</span>
+              <input id="globalSearch" type="search" data-i18n-placeholder="topbar.search" placeholder="搜索实习生、任务、维护信息" />
+            </label>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard" aria-labelledby="pageTitle">
+          <div class="metric-grid" id="metrics"></div>
+          <div class="dashboard-main">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow" data-i18n="dashboard.todayEyebrow">今日任务</p>
+                  <h2 data-i18n="dashboard.todayTitle">今日新增任务</h2>
+                </div>
+              </div>
+              <div class="task-stack" id="priorityTasks"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="interns" aria-labelledby="pageTitle">
+          <div class="section-actions">
+            <div>
+              <p class="eyebrow" data-i18n="interns.eyebrow">基础信息</p>
+              <h2 data-i18n="interns.title">实习生管理</h2>
+            </div>
+            <button class="primary-action" id="openInternForm" data-i18n="interns.add">＋ 新增实习生</button>
+          </div>
+          <form class="inline-form intern-form hidden" id="internForm">
+            <input name="name" data-i18n-placeholder="interns.namePh" placeholder="姓名" required />
+            <input name="language" list="languageOptions" data-i18n-placeholder="interns.languagePh" placeholder="语言，如：英语、德语、西语" required />
+            <input name="workDays" data-i18n-placeholder="interns.workDaysPh" placeholder="工作时间，如：周一、周三、周五" required />
+            <button type="submit" class="btn-save" data-i18n="common.save">保存</button>
+            <button type="button" class="btn-secondary" id="cancelInternForm" data-i18n="common.cancel">取消</button>
+          </form>
+          <datalist id="languageOptions"></datalist>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="interns.name">姓名</th>
+                  <th data-i18n="interns.language">负责语言</th>
+                  <th data-i18n="interns.workDays">工作时间</th>
+                  <th data-i18n="common.actions">操作</th>
+                </tr>
+              </thead>
+              <tbody id="internTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="tasks" aria-labelledby="pageTitle">
+          <div class="section-actions">
+            <div>
+              <h2 id="taskLanguageTitle">任务管理</h2>
+            </div>
+            <div class="section-buttons">
+              <div class="language-tabs" id="languageTabs" data-i18n-aria="tasks.langTabs"></div>
+              <button class="primary-action" id="openProductCenterPanel" data-i18n="tasks.manageProducts">管理产品中心</button>
+              <button class="primary-action" id="openImportPanel" data-i18n="tasks.import">导入任务</button>
+              <button class="primary-action" id="openTaskForm" data-i18n="tasks.create">＋ 新建任务</button>
+            </div>
+          </div>
+          <section class="panel import-panel hidden" id="importPanel">
+            <div class="panel-head">
+              <h2 data-i18n="tasks.importTitle">导入任务</h2>
+              <button type="button" class="btn-secondary panel-close" id="closeImportPanel" data-i18n="common.collapse">收起</button>
+            </div>
+            <form id="importTaskForm">
+              <input name="importMonth" type="month" />
+              <textarea name="raw" data-i18n-placeholder="tasks.importPh" placeholder="可粘贴表格内容"></textarea>
+              <button type="submit" class="btn-save" data-i18n="tasks.importSubmit">开始导入</button>
+            </form>
+          </section>
+          <section class="panel product-center-panel hidden" id="productCenterPanel">
+            <div class="panel-head">
+              <h2 data-i18n="tasks.productsTitle">产品中心</h2>
+              <button type="button" class="btn-secondary panel-close" id="closeProductCenterPanel" data-i18n="common.collapse">收起</button>
+            </div>
+            <form class="inline-form product-center-form" id="productCenterForm">
+              <input name="name" data-i18n-placeholder="tasks.productNamePh" placeholder="产品中心名称" required />
+              <button type="submit" class="btn-save" data-i18n="common.save">保存</button>
+              <button type="button" class="btn-secondary" id="cancelProductCenterEdit" data-i18n="common.cancel">取消</button>
+            </form>
+            <div class="product-center-list" id="productCenterList"></div>
+          </section>
+          <div class="task-list-wrap" id="taskBoard"></div>
+        </section>
+
+        <div class="modal hidden" id="taskFormModal" role="dialog" aria-modal="true" aria-labelledby="taskFormTitle">
+          <div class="modal-card modal-card-task">
+            <div class="panel-head">
+              <h2 id="taskFormTitle">新建任务</h2>
+              <button type="button" class="btn-secondary panel-close" id="closeTaskModal" data-i18n="common.close">关闭</button>
+            </div>
+            <form class="task-modal-form" id="taskForm">
+              <label class="field-label">
+                <span class="field-label-text" data-i18n="taskForm.title">任务名称</span>
+                <input name="title" data-i18n-placeholder="taskForm.titlePh" placeholder="请输入任务名称" required />
+              </label>
+              <label class="field-label">
+                <span class="field-label-text" data-i18n="taskForm.description">任务描述</span>
+                <textarea name="description" data-i18n-placeholder="taskForm.descriptionPh" placeholder="请输入任务描述" required></textarea>
+              </label>
+              <label class="field-label">
+                <span class="field-label-text" data-i18n="taskForm.product">产品中心</span>
+                <select name="product" required></select>
+              </label>
+              <label class="field-label">
+                <span class="field-label-text" data-i18n="taskForm.contact">对接人</span>
+                <input name="contact" data-i18n-placeholder="taskForm.contactPh" placeholder="创建需求的同学" required />
+              </label>
+              <label class="field-label">
+                <span class="field-label-text" data-i18n="taskForm.deadline">截止日期</span>
+                <input name="deadline" type="date" required />
+              </label>
+              <label class="field-label">
+                <span class="field-label-text" data-i18n="taskForm.priority">优先级</span>
+                <select name="priority" required>
+                  <option value="中">中优先级</option>
+                  <option value="高">高优先级</option>
+                  <option value="低">低优先级</option>
+                </select>
+              </label>
+              <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="cancelTaskEdit" data-i18n="common.cancel">取消</button>
+                <button type="submit" class="btn-save" data-i18n="common.save">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <section class="view" id="knowledge" aria-labelledby="pageTitle">
+          <div class="section-actions">
+            <div>
+              <p class="eyebrow" data-i18n="knowledge.eyebrow">本地化维护信息</p>
+              <h2 id="knowledgeLanguageTitle">知识库</h2>
+            </div>
+            <div class="section-buttons">
+              <div class="language-tabs" id="knowledgeLanguageTabs" data-i18n-aria="knowledge.langTabs"></div>
+              <button class="primary-action" type="button" id="openKnowledgeLanguageForm" data-i18n="knowledge.addLang">＋ 新增语言</button>
+              <button class="primary-action" id="openKnowledgeForm" data-i18n="knowledge.addEntry">＋ 新增信息</button>
+            </div>
+          </div>
+          <form class="inline-form knowledge-language-form hidden" id="knowledgeLanguageForm">
+            <input name="label" list="languageOptions" data-i18n-placeholder="knowledge.langPh" placeholder="语言名称，如：德语、西语" required />
+            <button type="submit" data-i18n="common.addBtn">添加</button>
+            <button type="button" id="cancelKnowledgeLanguage" data-i18n="common.cancel">取消</button>
+          </form>
+          <form class="inline-form knowledge-form hidden" id="knowledgeForm">
+            <select name="category" required>
+              <option value="maintenance">本地化偏好</option>
+              <option value="resource">书写习惯</option>
+              <option value="update">禁忌</option>
+            </select>
+            <input name="title" data-i18n-placeholder="knowledge.titlePh" placeholder="标题" required />
+            <input name="meta" data-i18n-placeholder="knowledge.tagPh" placeholder="标签" required />
+            <input name="submitter" data-i18n-placeholder="knowledge.submitterPh" placeholder="提交者" required />
+            <textarea name="detail" data-i18n-placeholder="knowledge.detailPh" placeholder="内容说明" required></textarea>
+            <button type="submit" data-i18n="common.save">保存</button>
+            <button type="button" id="cancelKnowledgeEdit" data-i18n="common.cancel">取消</button>
+          </form>
+          <div class="knowledge-layout" id="knowledgeLayout"></div>
+        </section>
+
+        <section class="view" id="reports" aria-labelledby="pageTitle">
+          <div class="section-actions">
+            <div>
+              <p class="eyebrow" data-i18n="reports.eyebrow">产品 · 语言 · 任务量 · 知识库</p>
+              <h2 data-i18n="reports.title">仪表盘</h2>
+            </div>
+          </div>
+          <div class="report-grid">
+            <section class="panel">
+              <h2 data-i18n="reports.byProduct">按产品统计</h2>
+              <div class="line-chart" id="productStats"></div>
+            </section>
+            <section class="panel">
+              <h2 data-i18n="reports.byLanguage">按语言统计</h2>
+              <div class="line-chart" id="languageStats"></div>
+            </section>
+            <section class="panel">
+              <h2 data-i18n="reports.taskVolume">任务量</h2>
+              <div id="taskVolumeStats"></div>
+            </section>
+            <section class="panel">
+              <h2 data-i18n="reports.knowledgeContrib">知识库贡献数</h2>
+              <div id="knowledgeContributionStats"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="guides" aria-labelledby="pageTitle">
+          <div class="section-actions">
+            <div>
+              <p class="eyebrow" data-i18n="guides.eyebrow">入职与协作</p>
+              <h2 data-i18n="guides.title">新手指南</h2>
+            </div>
+            <button class="primary-action" type="button" id="openGuideForm" data-i18n="guides.create">＋ 创建文档</button>
+          </div>
+          <form class="inline-form guide-form hidden" id="guideForm">
+            <input name="title" data-i18n-placeholder="guides.docTitlePh" placeholder="文档标题" required />
+            <textarea name="content" data-i18n-placeholder="guides.docContentPh" placeholder="文档内容（支持 Markdown 纯文本）" required></textarea>
+            <button type="submit" data-i18n="common.save">保存</button>
+            <button type="button" id="cancelGuideEdit" data-i18n="common.cancel">取消</button>
+          </form>
+          <div class="guide-upload-row">
+            <label class="primary-action" for="guideFileInput" style="cursor:pointer;display:inline-flex;align-items:center;min-height:38px;padding:0 14px;" data-i18n="guides.upload">上传文档</label>
+            <input id="guideFileInput" type="file" accept=".txt,.md,.markdown,.json,.csv,.html,.htm,.doc,.docx,.xls,.xlsx" hidden />
+            <span class="guide-meta" data-i18n="guides.uploadHint">支持 .txt/.md/.doc/.docx/.xls/.xlsx</span>
+          </div>
+          <div class="guide-list" id="guideList"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="i18n.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
