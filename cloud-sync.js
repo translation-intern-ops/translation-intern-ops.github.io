@@ -57,6 +57,12 @@ function fromB64Url(code) {
   return bytes;
 }
 
+const TEAM_SYNC_DEFAULTS = {
+  url: "https://lhkscprljckyldrhluwv.supabase.co",
+  anonKey: "sb_publishable_XvLnOUj2BYPqQT9jwb3ajw_WTEJi_RL",
+  workspaceId: "translation-intern-ops",
+};
+
 function getSyncConfig() {
   const override = loadSyncOverride();
   if (override?.url && override?.anonKey) {
@@ -69,6 +75,9 @@ function getSyncConfig() {
   }
   const base = typeof SYNC_CONFIG !== "undefined" ? SYNC_CONFIG : {};
   if (base.enabled && base.url && base.anonKey) return base;
+  if (TEAM_SYNC_DEFAULTS.url && TEAM_SYNC_DEFAULTS.anonKey) {
+    return { enabled: true, ...TEAM_SYNC_DEFAULTS };
+  }
   return {
     enabled: false,
     url: base.url || "",
