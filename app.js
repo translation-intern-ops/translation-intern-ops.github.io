@@ -1707,16 +1707,17 @@ function startApp() {
     applyStaticI18n();
     renderAll();
     switchView("dashboard");
+    showAppShell();
   };
   launch();
+}
+
+function showAppShell() {
+  document.querySelector(".app-shell")?.classList.remove("hidden");
 }
 
 function bootApp() {
   startApp();
 }
 
-if (window.__authReady) {
-  bootApp();
-} else {
-  document.addEventListener("auth-ready", bootApp, { once: true });
-}
+document.addEventListener("auth-ready", bootApp, { once: true });

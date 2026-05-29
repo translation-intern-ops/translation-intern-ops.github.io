@@ -90,7 +90,7 @@ function readSession() {
       sessionStorage.removeItem(AUTH_STORAGE_KEY);
       return null;
     }
-    if (!session.password && !session.keyMaterial) return null;
+    if (!session.password) return null;
     return session;
   } catch {
     return null;
@@ -219,13 +219,10 @@ function renderAuthGate(mode = "login") {
 }
 
 async function resolveSessionKey(session) {
-  if (session.password) {
-    return SecureStorage.deriveKey(session.password);
+  if (!session.password) {
+    throw new Error("Session password missing");
   }
-  if (session.keyMaterial) {
-    return SecureStorage.importKeyMaterial(session.keyMaterial);
-  }
-  throw new Error("Session key missing");
+  return SecureStorage.deriveKey(session.password);
 }
 
 async function completeLogin(password) {
@@ -235,7 +232,6 @@ async function completeLogin(password) {
   window.__secureStorageKey = key;
   SecureStorage.clearFailedAttempts();
   removeAuthGate();
-  showAppShell();
   mountLogoutButton();
   document.dispatchEvent(new CustomEvent("auth-ready", { detail: { key } }));
 }
@@ -258,7 +254,7 @@ function mountLogoutButton() {
 async function restoreAuthenticatedSession(session) {
   try {
     window.__secureStorageKey = await resolveSessionKey(session);
-    showAppShell();
+    removeAuthGate();
     mountLogoutButton();
     document.dispatchEvent(new CustomEvent("auth-ready", { detail: { key: window.__secureStorageKey } }));
   } catch {
@@ -274,6 +270,8 @@ async function initAccessGate() {
     document.dispatchEvent(new Event("auth-ready"));
     return;
   }
+
+  hideAppShell();
 
   if (AUTH_CONFIG.blockPublicHost && (isPublicHost() || !isPrivateHost())) {
     renderBlockedGate();

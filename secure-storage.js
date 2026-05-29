@@ -232,19 +232,33 @@ const SecureStorage = {
   },
 
   loadBackup() {
+    return this.readBackupMeta()?.payload ?? null;
+  },
+
+  readBackupMeta() {
     try {
       const raw = localStorage.getItem(BACKUP_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed?.state) return null;
       return {
-        state: parsed.state,
-        productCenters: parsed.productCenters,
-        languages: parsed.languages,
+        savedAt: parsed.savedAt ?? "",
+        payload: {
+          state: parsed.state,
+          productCenters: parsed.productCenters,
+          languages: parsed.languages,
+        },
       };
     } catch {
       return null;
     }
+  },
+
+  pickBestPayload(backupMeta, vaultPayload, vaultSavedAt) {
+    if (backupMeta?.payload && vaultPayload) {
+      return backupMeta.savedAt >= (vaultSavedAt ?? "") ? backupMeta.payload : vaultPayload;
+    }
+    return backupMeta?.payload ?? vaultPayload ?? null;
   },
 
   hasBackup() {
@@ -287,8 +301,9 @@ const SecureStorage = {
   },
 
   async loadVault(key) {
+    const backupMeta = this.readBackupMeta();
     const local = await this.tryDecryptLocalVault(key);
-    let payload = local?.payload ?? null;
+    let payload = this.pickBestPayload(backupMeta, local?.payload ?? null, local?.envelope?.savedAt);
 
     if (typeof CloudSync !== "undefined" && CloudSync.isEnabled()) {
       try {
@@ -303,11 +318,12 @@ const SecureStorage = {
           }
 
           const remoteSavedAt = remoteEnvelope.savedAt ?? row.updated_at ?? "";
-          const localSavedAt = local?.envelope?.savedAt ?? "";
+          const localSavedAt = backupMeta?.savedAt ?? local?.envelope?.savedAt ?? "";
           this.lastRemoteUpdatedAt = row.updated_at ?? "";
 
           if (remotePayload && (!payload || remoteSavedAt > localSavedAt)) {
             this.writeVaultLocal(remoteEnvelope);
+            this.writeBackup(remotePayload);
             payload = remotePayload;
           }
         }
@@ -316,12 +332,16 @@ const SecureStorage = {
       }
     }
 
-    if (payload) {
-      this.writeBackup(payload);
-      return payload;
+    if (!payload) return null;
+
+    const vaultSavedAt = local?.envelope?.savedAt ?? "";
+    const backupSavedAt = backupMeta?.savedAt ?? "";
+    if (!local?.payload || backupSavedAt > vaultSavedAt) {
+      const envelope = await this.encryptPayload(key, payload);
+      this.writeVaultLocal(envelope);
     }
 
-    return this.loadBackup();
+    return payload;
   },
 
   async fetchRemoteVault(key) {
