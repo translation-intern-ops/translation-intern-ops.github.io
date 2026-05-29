@@ -255,26 +255,98 @@ function startCloudPolling(key) {
 }
 
 function mountSyncStatus() {
-  const toolbar = document.querySelector(".toolbar");
-  if (!toolbar || document.getElementById("syncStatus")) return;
-  const badge = document.createElement("span");
-  badge.id = "syncStatus";
-  badge.className = "sync-status sync-status-off";
-  badge.title = t("sync.status.off");
-  badge.textContent = t("sync.label.off");
-  toolbar.insertBefore(badge, toolbar.firstChild);
+  const setupBtn = document.getElementById("openSyncSetupBtn");
+  if (setupBtn) setupBtn.textContent = t("sync.setupBtn");
+  const bannerBtn = document.getElementById("openSyncBannerBtn");
+  if (bannerBtn) bannerBtn.textContent = t("sync.banner.setup");
   void updateSyncStatus();
+  updateSyncBanner();
+}
+
+function updateSyncBanner() {
+  const banner = document.getElementById("syncBanner");
+  if (!banner) return;
+  const enabled = typeof CloudSync !== "undefined" && CloudSync.isEnabled();
+  banner.classList.toggle("hidden", enabled);
+  const text = document.getElementById("syncBannerText");
+  if (text) text.textContent = t("sync.banner.text");
+}
+
+function openSyncSetupModal() {
+  const modal = document.getElementById("syncSetupModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  const override = loadSyncOverride();
+  const form = document.getElementById("syncSetupForm");
+  if (form && override) {
+    form.elements.url.value = override.url || "";
+    form.elements.anonKey.value = override.anonKey || "";
+  }
+  const codeBox = document.getElementById("syncSetupCodeBox");
+  const codeField = document.getElementById("syncSetupCode");
+  if (override?.url && override?.anonKey && codeBox && codeField) {
+    codeBox.classList.remove("hidden");
+    codeField.value = encodeSyncSetupCode(override);
+  } else if (codeBox) {
+    codeBox.classList.add("hidden");
+  }
+}
+
+function closeSyncSetupModal() {
+  document.getElementById("syncSetupModal")?.classList.add("hidden");
+}
+
+async function handleSyncSetupSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const code = String(form.elements.code.value ?? "").trim();
+  const url = String(form.elements.url.value ?? "").trim();
+  const anonKey = String(form.elements.anonKey.value ?? "").trim();
+  let config;
+  try {
+    if (code) {
+      config = decodeSyncSetupCode(code);
+    } else if (url && anonKey) {
+      config = { url, anonKey, workspaceId: "translation-intern-ops" };
+    } else {
+      showToast(t("toast.syncSetupRequired"));
+      return;
+    }
+  } catch {
+    showToast(t("toast.syncSetupInvalid"));
+    return;
+  }
+  saveSyncOverride(config);
+  const online = await CloudSync.ping();
+  if (!online) {
+    clearSyncOverride();
+    showToast(t("toast.syncSetupFailed"));
+    return;
+  }
+  const codeBox = document.getElementById("syncSetupCodeBox");
+  const codeField = document.getElementById("syncSetupCode");
+  if (codeBox && codeField) {
+    codeBox.classList.remove("hidden");
+    codeField.value = encodeSyncSetupCode(config);
+  }
+  showToast(t("toast.syncSetupOk"));
+  setTimeout(() => window.location.reload(), 800);
 }
 
 async function updateSyncStatus(forcedState) {
   const badge = document.getElementById("syncStatus");
+  const setupBtn = document.getElementById("openSyncSetupBtn");
   if (!badge) return;
   if (typeof CloudSync === "undefined" || !CloudSync.isEnabled()) {
     badge.className = "sync-status sync-status-off";
     badge.textContent = t("sync.label.off");
     badge.title = t("sync.status.off");
+    setupBtn?.classList.remove("hidden");
+    updateSyncBanner();
     return;
   }
+  setupBtn?.classList.add("hidden");
+  updateSyncBanner();
   if (forcedState === "error") {
     badge.className = "sync-status sync-status-error";
     badge.textContent = t("sync.label.error");
@@ -1818,3 +1890,11 @@ function bootApp() {
 }
 
 document.addEventListener("auth-ready", bootApp, { once: true });
+
+document.getElementById("openSyncSetupBtn")?.addEventListener("click", openSyncSetupModal);
+document.getElementById("openSyncBannerBtn")?.addEventListener("click", openSyncSetupModal);
+document.getElementById("closeSyncSetupModal")?.addEventListener("click", closeSyncSetupModal);
+document.getElementById("syncSetupModal")?.addEventListener("click", (event) => {
+  if (event.target.id === "syncSetupModal") closeSyncSetupModal();
+});
+document.getElementById("syncSetupForm")?.addEventListener("submit", handleSyncSetupSubmit);

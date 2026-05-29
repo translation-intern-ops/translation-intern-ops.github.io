@@ -199,6 +199,13 @@ const messages = {
     "sync.status.off": "团队同步未开启，数据只保存在你的浏览器，同事看不到。",
     "sync.status.on": "已连接团队云端，修改会自动同步给同事。",
     "sync.status.error": "无法连接团队云端，请检查 Supabase 配置。",
+    "sync.banner.text": "团队同步未开启：你的修改只保存在本浏览器，同事看不到。请点击「同步设置」完成配置。",
+    "sync.banner.setup": "配置团队同步",
+    "sync.setupBtn": "同步设置",
+    "toast.syncSetupRequired": "请填写 Supabase URL 和 Key，或粘贴团队配置码。",
+    "toast.syncSetupInvalid": "团队配置码无效，请检查后重试。",
+    "toast.syncSetupFailed": "无法连接 Supabase，请检查 URL、Key 和数据库脚本。",
+    "toast.syncSetupOk": "团队同步已开启，正在刷新…",
     "month.jan": "01月",
     "month.feb": "02月",
     "month.mar": "03月",
@@ -410,6 +417,13 @@ const messages = {
     "sync.status.off": "Team sync is off. Data stays in this browser only.",
     "sync.status.on": "Connected to team cloud. Changes sync automatically.",
     "sync.status.error": "Cannot reach team cloud. Check Supabase configuration.",
+    "sync.banner.text": "Team sync is off. Changes stay in this browser only. Open Sync Settings to configure.",
+    "sync.banner.setup": "Configure team sync",
+    "sync.setupBtn": "Sync settings",
+    "toast.syncSetupRequired": "Enter Supabase URL and key, or paste a team setup code.",
+    "toast.syncSetupInvalid": "Invalid team setup code.",
+    "toast.syncSetupFailed": "Could not connect to Supabase. Check URL, key, and SQL setup.",
+    "toast.syncSetupOk": "Team sync enabled. Reloading…",
     "month.jan": "Jan",
     "month.feb": "Feb",
     "month.mar": "Mar",
@@ -510,6 +524,7 @@ function applyStaticI18n() {
 
   document.querySelectorAll("[data-i18n]").forEach((element) => {
     if (element.closest("#uiLocaleTabs")) return;
+    if (element.id === "syncStatus") return;
     element.textContent = t(element.dataset.i18n);
   });
 
