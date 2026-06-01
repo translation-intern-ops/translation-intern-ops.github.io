@@ -1072,31 +1072,76 @@ function monthGroupKey(date) {
   return date.slice(0, 2);
 }
 
+const DONUT_LANG_COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#f43f5e", "#14b8a6", "#6366f1", "#ec4899"];
+
+function reportStatusLabel(key) {
+  const map = {
+    todo: "reports.status.todo",
+    doing: "reports.status.doing",
+    review: "reports.status.review",
+    done: "reports.status.done",
+  };
+  return t(map[key] ?? key);
+}
+
+function polarPoint(cx, cy, radius, angleDeg) {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(rad),
+    y: cy + radius * Math.sin(rad),
+  };
+}
+
 function renderDonutStat({ total, segments, totalLabel, emptyText }) {
   if (!total || !segments.length) {
     return `<div class="empty-row">${emptyText}</div>`;
   }
-  const radius = 44;
-  const strokeWidth = 14;
-  const size = 112;
+  const size = 280;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = 54;
+  const strokeWidth = 20;
+  const ringOuter = radius + strokeWidth / 2;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
+  let startAngle = 0;
+  const guides = [];
+
   const circles = segments
     .map((segment) => {
       const ratio = segment.value / total;
       const length = circumference * ratio;
-      const circle = `<circle cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none" stroke="${segment.color}" stroke-width="${strokeWidth}" stroke-dasharray="${length} ${circumference}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${size / 2} ${size / 2})"></circle>`;
+      const sweep = ratio * 360;
+      const midAngle = startAngle + sweep / 2;
+      const circle = `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${segment.color}" stroke-width="${strokeWidth}" stroke-dasharray="${length} ${circumference}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
       offset += length;
+
+      if (ratio >= 0.06) {
+        const anchor = polarPoint(cx, cy, ringOuter, midAngle);
+        const elbow = polarPoint(cx, cy, ringOuter + 22, midAngle);
+        const isLeft = midAngle > 90 && midAngle < 270;
+        const textX = isLeft ? 18 : size - 18;
+        const textAnchor = isLeft ? "start" : "end";
+        const labelY = elbow.y;
+        guides.push(`
+          <path class="donut-guide" d="M ${anchor.x} ${anchor.y} L ${elbow.x} ${elbow.y} L ${textX} ${elbow.y}" stroke="${segment.color}" fill="none"></path>
+          <text class="donut-label" x="${textX}" y="${labelY - 4}" text-anchor="${textAnchor}">${escapeHtml(segment.label)}</text>
+          <text class="donut-label-sub" x="${textX}" y="${labelY + 10}" text-anchor="${textAnchor}">${escapeHtml(segment.detail)}</text>
+        `);
+      }
+
+      startAngle += sweep;
       return circle;
     })
     .join("");
 
   return `
-    <article class="donut-stat">
-      <div class="donut-chart-wrap">
-        <svg class="donut-chart" viewBox="0 0 ${size} ${size}" aria-hidden="true">
-          <circle cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none" stroke="rgba(148, 163, 184, 0.2)" stroke-width="${strokeWidth}"></circle>
+    <article class="donut-stat donut-stat-labeled">
+      <div class="donut-chart-wrap donut-chart-wrap--labeled">
+        <svg class="donut-chart-labeled" viewBox="0 0 ${size} ${size}" role="img" aria-label="${escapeHtml(totalLabel)}">
+          <circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="rgba(148, 163, 184, 0.2)" stroke-width="${strokeWidth}"></circle>
           ${circles}
+          ${guides.join("")}
         </svg>
         <div class="donut-center">
           <strong>${total}</strong>
@@ -1373,10 +1418,10 @@ function renderReports() {
     .join("");
 
   const taskStatusBreakdown = [
-    { key: "todo", label: statusMap.todo, color: "#f59e0b", value: state.tasks.filter((task) => task.status === "todo").length },
-    { key: "doing", label: statusMap.doing, color: "#14b8a6", value: state.tasks.filter((task) => task.status === "doing").length },
-    { key: "review", label: statusMap.review, color: "#f43f5e", value: state.tasks.filter((task) => task.status === "review").length },
-    { key: "done", label: statusMap.done, color: "#8b5cf6", value: state.tasks.filter((task) => task.status === "done").length },
+    { key: "todo", label: reportStatusLabel("todo"), color: "#f59e0b", value: state.tasks.filter((task) => task.status === "todo").length },
+    { key: "doing", label: reportStatusLabel("doing"), color: "#14b8a6", value: state.tasks.filter((task) => task.status === "doing").length },
+    { key: "review", label: reportStatusLabel("review"), color: "#f43f5e", value: state.tasks.filter((task) => task.status === "review").length },
+    { key: "done", label: reportStatusLabel("done"), color: "#8b5cf6", value: state.tasks.filter((task) => task.status === "done").length },
   ].filter((item) => item.value > 0);
   const taskTotal = state.tasks.length;
   $("#taskVolumeStats").innerHTML = renderDonutStat({
@@ -1399,9 +1444,30 @@ function renderReports() {
   const knowledgeTotal = state.maintenance.length + state.resourceStatus.length + state.updateLog.length;
   $("#knowledgeContributionStats").innerHTML = renderDonutStat({
     total: knowledgeTotal,
-    totalLabel: t("reports.knowledgeContrib"),
-    emptyText: t("reports.noKnowledgeLang"),
+    totalLabel: t("reports.knowledgeTotal"),
+    emptyText: t("reports.noKnowledgeData"),
     segments: knowledgeBreakdown.map((item) => ({
+      label: item.label,
+      color: item.color,
+      detail: t("reports.contrib", { count: item.value }),
+      value: item.value,
+    })),
+  });
+
+  const knowledgeLangs = getKnowledgeLanguages();
+  const knowledgeByLang = knowledgeLangs
+    .map((language, index) => ({
+      label: displayLanguageLabel(language),
+      value: allKnowledgeEntries().filter((item) => item.language === language.id).length,
+      color: DONUT_LANG_COLORS[index % DONUT_LANG_COLORS.length],
+    }))
+    .filter((item) => item.value > 0);
+  const knowledgeLangTotal = knowledgeByLang.reduce((sum, item) => sum + item.value, 0);
+  $("#knowledgeLanguageStats").innerHTML = renderDonutStat({
+    total: knowledgeLangTotal,
+    totalLabel: t("reports.knowledgeTotal"),
+    emptyText: t("reports.noKnowledgeLang"),
+    segments: knowledgeByLang.map((item) => ({
       label: item.label,
       color: item.color,
       detail: t("reports.contrib", { count: item.value }),
