@@ -572,18 +572,10 @@ h3 {
   min-width: 0;
 }
 
-.task-row > span:first-child,
+.task-row > span:first-child:not(.task-data-cell):not(.task-contact-cell),
 .task-title-cell strong,
 .task-title-cell p {
   font-size: 14px;
-}
-
-.task-row .task-data-cell,
-.task-row .task-contact-cell,
-.task-row .task-assignee-select {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
 }
 
 .task-title-cell {
@@ -1708,4 +1700,14 @@ button.btn-save:disabled {
   .donut-stat {
     grid-template-columns: 1fr;
   }
+}
+
+/* 任务表：语言 / 创建日期 / 截止日期 与负责人、对接人同字号 */
+.task-list .task-row span.task-data-cell,
+.task-list .task-row span.task-contact-cell,
+.task-list .task-row select.task-assignee-select {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
 }
