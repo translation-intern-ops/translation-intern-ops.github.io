@@ -1073,6 +1073,7 @@ function monthGroupKey(date) {
 }
 
 const DONUT_LANG_COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#f43f5e", "#14b8a6", "#6366f1", "#ec4899"];
+const BAR_CHART_COLORS = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b"];
 
 function reportStatusLabel(key) {
   const map = {
@@ -1103,22 +1104,25 @@ function renderRankedBarChart(items, emptyText) {
   const max = Math.max(...rows.map((row) => row.value));
   return `
     <div class="ranked-bar-chart">
-      <div class="bar-chart-scale">
-        <span>0</span>
-        <span>${t("reports.countItems", { count: max })}</span>
+      <div class="bar-chart-head">
+        <span class="bar-head-label"></span>
+        <div class="bar-chart-axis" aria-hidden="true">
+          <span>0</span>
+          <span>${t("reports.countItems", { count: max })}</span>
+        </div>
+        <span class="bar-head-value"></span>
       </div>
       ${rows
         .map((row, index) => {
           const percent = max ? (row.value / max) * 100 : 0;
-          const widthStyle = row.value > 0 && percent < 4 ? `width: max(8px, ${percent.toFixed(2)}%);` : `width: ${percent.toFixed(2)}%;`;
+          const color = BAR_CHART_COLORS[index % BAR_CHART_COLORS.length];
           return `
         <div class="bar-row">
-          <span class="bar-rank">${index + 1}</span>
           <span class="bar-label" title="${escapeHtml(row.label)}">${escapeHtml(row.label)}</span>
-          <div class="bar-track" role="presentation" aria-label="${escapeHtml(row.label)} ${t("reports.countItems", { count: row.value })}">
-            <div class="bar-fill" style="${widthStyle}"></div>
+          <div class="bar-area" style="--pct: ${percent.toFixed(2)}; --bar-color: ${color}" role="presentation" aria-label="${escapeHtml(row.label)} ${t("reports.countItems", { count: row.value })}">
+            <div class="bar-fill"></div>
           </div>
-          <span class="bar-value">${t("reports.countItems", { count: row.value })}</span>
+          <span class="bar-value">${row.value}</span>
         </div>
       `;
         })
