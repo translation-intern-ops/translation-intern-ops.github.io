@@ -1102,6 +1102,14 @@ function renderRankedBarChart(items, emptyText) {
     return `<div class="empty-row">${emptyText}</div>`;
   }
   const max = Math.max(...rows.map((row) => row.value));
+  const plotWidth = 260;
+  const plotHeight = 16;
+  const gridStep = plotWidth / 5;
+  const gridLines = Array.from({ length: 6 }, (_, index) => {
+    const x = index * gridStep;
+    return `<line x1="${x}" y1="0" x2="${x}" y2="${plotHeight}" class="bar-grid-line"></line>`;
+  }).join("");
+
   return `
     <div class="ranked-bar-chart">
       <div class="bar-chart-head">
@@ -1114,14 +1122,15 @@ function renderRankedBarChart(items, emptyText) {
       </div>
       ${rows
         .map((row, index) => {
-          const percent = max ? (row.value / max) * 100 : 0;
+          const barWidth = max ? Math.max(2, Math.round((row.value / max) * plotWidth)) : 0;
           const color = BAR_CHART_COLORS[index % BAR_CHART_COLORS.length];
           return `
         <div class="bar-row">
           <span class="bar-label" title="${escapeHtml(row.label)}">${escapeHtml(row.label)}</span>
-          <div class="bar-area" style="--pct: ${percent.toFixed(2)}; --bar-color: ${color}" role="presentation" aria-label="${escapeHtml(row.label)} ${t("reports.countItems", { count: row.value })}">
-            <div class="bar-fill"></div>
-          </div>
+          <svg class="bar-svg" viewBox="0 0 ${plotWidth} ${plotHeight}" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(row.label)} ${t("reports.countItems", { count: row.value })}">
+            ${gridLines}
+            <rect x="0" y="1" width="${barWidth}" height="${plotHeight - 2}" rx="2" fill="${color}"></rect>
+          </svg>
           <span class="bar-value">${row.value}</span>
         </div>
       `;
