@@ -1062,6 +1062,54 @@ function monthGroupKey(date) {
   return date.slice(0, 2);
 }
 
+function renderDonutStat({ total, segments, totalLabel, emptyText }) {
+  if (!total || !segments.length) {
+    return `<div class="empty-row">${emptyText}</div>`;
+  }
+  const radius = 44;
+  const strokeWidth = 14;
+  const size = 112;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  const circles = segments
+    .map((segment) => {
+      const ratio = segment.value / total;
+      const length = circumference * ratio;
+      const circle = `<circle cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none" stroke="${segment.color}" stroke-width="${strokeWidth}" stroke-dasharray="${length} ${circumference}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${size / 2} ${size / 2})"></circle>`;
+      offset += length;
+      return circle;
+    })
+    .join("");
+
+  return `
+    <article class="donut-stat">
+      <div class="donut-chart-wrap">
+        <svg class="donut-chart" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+          <circle cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none" stroke="rgba(148, 163, 184, 0.2)" stroke-width="${strokeWidth}"></circle>
+          ${circles}
+        </svg>
+        <div class="donut-center">
+          <strong>${total}</strong>
+          <span>${totalLabel}</span>
+        </div>
+      </div>
+      <div class="donut-legend">
+        ${segments
+          .map(
+            (segment) => `
+            <div class="donut-legend-item">
+              <span class="dot" style="--dot-color:${segment.color}"></span>
+              <strong>${segment.label}</strong>
+              <span>${segment.detail}</span>
+            </div>
+          `,
+          )
+          .join("")}
+      </div>
+    </article>
+  `;
+}
+
 function renderLanguages() {
   syncLanguagesFromInterns();
   const linkedLanguages = getLinkedLanguages();
@@ -1314,34 +1362,42 @@ function renderReports() {
     })
     .join("");
 
-  const totalTasks = state.tasks.length;
-  const activeTasks = state.tasks.filter((task) => task.status !== "done").length;
-  const highTasks = state.tasks.filter((task) => task.priority === "高").length;
-  $("#taskVolumeStats").innerHTML = [
-    [t("reports.totalTasks"), totalTasks, totalTasks],
-    [t("reports.activeTasks"), activeTasks, totalTasks],
-    [t("reports.highPriority"), highTasks, totalTasks],
-  ]
-    .map(([label, value, max]) => {
-      const percent = max ? Math.round((value / max) * 100) : 0;
-      return `<article class="stat-row visual-stat"><div><strong>${label}</strong><span>${t("reports.countItems", { count: value })}</span></div><div class="progress"><span style="width:${percent}%"></span></div></article>`;
-    })
-    .join("");
-
-  const knowledgeLangs = getKnowledgeLanguages();
-  const knowledgeCounts = knowledgeLangs.map((language) => {
-    const count = allKnowledgeEntries().filter((item) => item.language === language.id).length;
-    return [displayLanguageLabel(language), count, language.id];
+  const taskStatusBreakdown = [
+    { key: "todo", label: statusMap.todo, color: "#f59e0b", value: state.tasks.filter((task) => task.status === "todo").length },
+    { key: "doing", label: statusMap.doing, color: "#14b8a6", value: state.tasks.filter((task) => task.status === "doing").length },
+    { key: "review", label: statusMap.review, color: "#f43f5e", value: state.tasks.filter((task) => task.status === "review").length },
+    { key: "done", label: statusMap.done, color: "#8b5cf6", value: state.tasks.filter((task) => task.status === "done").length },
+  ].filter((item) => item.value > 0);
+  const taskTotal = state.tasks.length;
+  $("#taskVolumeStats").innerHTML = renderDonutStat({
+    total: taskTotal,
+    totalLabel: t("reports.totalTasks"),
+    emptyText: t("tasks.empty"),
+    segments: taskStatusBreakdown.map((item) => ({
+      label: item.label,
+      color: item.color,
+      detail: t("reports.countItems", { count: item.value }),
+      value: item.value,
+    })),
   });
-  const maxKnowledge = Math.max(1, ...knowledgeCounts.map(([, count]) => count));
-  $("#knowledgeContributionStats").innerHTML = knowledgeCounts.length
-    ? knowledgeCounts
-        .map(([label, count]) => {
-          const percent = Math.round((count / maxKnowledge) * 100);
-          return `<article class="stat-row visual-stat"><div><strong>${label}</strong><span>${t("reports.contrib", { count })}</span></div><div class="progress"><span style="width:${percent}%"></span></div></article>`;
-        })
-        .join("")
-    : `<div class="empty-row">${t("reports.noKnowledgeLang")}</div>`;
+
+  const knowledgeBreakdown = [
+    { label: t("knowledge.cat.preference"), value: state.maintenance.length, color: "#3b82f6" },
+    { label: t("knowledge.cat.writing"), value: state.resourceStatus.length, color: "#10b981" },
+    { label: t("knowledge.cat.taboo"), value: state.updateLog.length, color: "#8b5cf6" },
+  ].filter((item) => item.value > 0);
+  const knowledgeTotal = state.maintenance.length + state.resourceStatus.length + state.updateLog.length;
+  $("#knowledgeContributionStats").innerHTML = renderDonutStat({
+    total: knowledgeTotal,
+    totalLabel: t("reports.knowledgeContrib"),
+    emptyText: t("reports.noKnowledgeLang"),
+    segments: knowledgeBreakdown.map((item) => ({
+      label: item.label,
+      color: item.color,
+      detail: t("reports.contrib", { count: item.value }),
+      value: item.value,
+    })),
+  });
 }
 
 function renderAll() {
