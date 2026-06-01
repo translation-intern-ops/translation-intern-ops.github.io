@@ -667,10 +667,19 @@ function assigneeOptions(task) {
     .join("");
 }
 
-function productCenterOptions(selected = productCenters[0]) {
-  return productCenters
-    .map((product) => `<option value="${product}" ${product === selected ? "selected" : ""}>${product}</option>`)
-    .join("");
+function renderProductCenterOptions() {
+  const datalist = $("#productCenterOptions");
+  if (!datalist) return;
+  datalist.innerHTML = productCenters.map((product) => `<option value="${product}"></option>`).join("");
+}
+
+function resolveProductCenter(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const exact = productCenters.find((product) => product === text);
+  if (exact) return exact;
+  const lowered = text.toLowerCase();
+  return productCenters.find((product) => product.toLowerCase() === lowered) ?? "";
 }
 
 function labelToDateInput(value) {
@@ -701,6 +710,7 @@ function closeTaskForm() {
 }
 
 function renderProductCenters() {
+  renderProductCenterOptions();
   $("#productCenterList").innerHTML = productCenters
     .map((product, index) => {
       const usedCount = state.tasks.filter((task) => task.product === product).length;
@@ -1121,7 +1131,7 @@ function renderLanguages() {
   if (datalist) {
     datalist.innerHTML = languages.map((language) => `<option value="${displayLanguageLabel(language)}"></option>`).join("");
   }
-  $("#taskForm select[name='product']").innerHTML = productCenterOptions();
+  renderProductCenterOptions();
 }
 
 function renderMetrics() {
@@ -1769,12 +1779,17 @@ $("#internForm").addEventListener("submit", (event) => {
 $("#taskForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
+  const product = resolveProductCenter(form.get("product"));
+  if (!product) {
+    showToast(t("toast.productSelectRequired"));
+    return;
+  }
   const firstIntern = internsForLanguage(activeLanguage)[0];
   const wasEditing = editingTaskId !== null;
   const value = {
     id: editingTaskId ?? Date.now(),
     title: form.get("title").trim(),
-    product: form.get("product").trim(),
+    product,
     language: activeLanguage,
     status: "todo",
     assignee: firstIntern?.name ?? "",

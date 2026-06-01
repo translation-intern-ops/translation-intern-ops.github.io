@@ -588,6 +588,7 @@ h3 {
 .task-title-cell p {
   color: var(--muted);
   margin-bottom: 0;
+  white-space: pre-line;
 }
 
 .text-button {
@@ -836,7 +837,7 @@ h3 {
 }
 
 .modal-card-task {
-  width: min(560px, 96vw);
+  width: min(680px, 96vw);
 }
 
 .modal-card-task .panel-head {
