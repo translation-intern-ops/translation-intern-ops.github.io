@@ -526,6 +526,11 @@ h3 {
   text-overflow: ellipsis;
 }
 
+.task-row > span:not(:first-child):not(.priority-badge) {
+  font-size: 13px;
+  color: var(--ink);
+}
+
 .intern-work-days,
 .intern-work-days-display {
   font-size: 13px;
