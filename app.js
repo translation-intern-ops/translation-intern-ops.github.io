@@ -1092,7 +1092,35 @@ function polarPoint(cx, cy, radius, angleDeg) {
   };
 }
 
-function renderDonutStat({ total, segments, totalLabel, emptyText }) {
+function renderRankedBarChart(items, emptyText) {
+  const rows = items
+    .map(([label, value]) => ({ label: String(label), value: Number(value) || 0 }))
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value);
+  if (!rows.length) {
+    return `<div class="empty-row">${emptyText}</div>`;
+  }
+  const max = Math.max(...rows.map((row) => row.value));
+  return `
+    <div class="ranked-bar-chart">
+      ${rows
+        .map(
+          (row) => `
+        <div class="bar-row">
+          <span class="bar-label" title="${escapeHtml(row.label)}">${escapeHtml(row.label)}</span>
+          <div class="bar-track" role="presentation">
+            <div class="bar-fill" style="width:${Math.max(10, Math.round((row.value / max) * 100))}%"></div>
+          </div>
+          <span class="bar-value">${t("reports.countItems", { count: row.value })}</span>
+        </div>
+      `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDonutStat({ total, segments, totalLabel, emptyText, showGuideLabels = true }) {
   if (!total || !segments.length) {
     return `<div class="empty-row">${emptyText}</div>`;
   }
@@ -1116,7 +1144,7 @@ function renderDonutStat({ total, segments, totalLabel, emptyText }) {
       const circle = `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${segment.color}" stroke-width="${strokeWidth}" stroke-dasharray="${length} ${circumference}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
       offset += length;
 
-      if (ratio >= 0.06) {
+      if (showGuideLabels && ratio >= 0.08 && sweep >= 28) {
         const anchor = polarPoint(cx, cy, ringOuter, midAngle);
         const elbow = polarPoint(cx, cy, ringOuter + 22, midAngle);
         const isLeft = midAngle > 90 && midAngle < 270;
@@ -1400,22 +1428,13 @@ function renderKnowledge() {
 
 function renderReports() {
   const productStats = productCenters.map((product) => [product, state.tasks.filter((task) => task.product === product).length]);
-  const maxProduct = Math.max(1, ...productStats.map(([, value]) => value));
-  $("#productStats").innerHTML = productStats
-    .map(([label, value]) => {
-      const height = Math.max(18, Math.round((value / maxProduct) * 100));
-      return `<div class="chart-col"><div class="chart-bar" style="height:${height}%"></div><span>${label}<br>${t("reports.countItems", { count: value })}</span></div>`;
-    })
-    .join("");
+  $("#productStats").innerHTML = renderRankedBarChart(productStats, t("tasks.empty"));
 
-  const languageStats = languages.map((language) => [displayLanguageLabel(language), state.tasks.filter((task) => task.language === language.id).length]);
-  const maxLanguage = Math.max(1, ...languageStats.map(([, value]) => value));
-  $("#languageStats").innerHTML = languageStats
-    .map(([label, value]) => {
-      const height = Math.max(18, Math.round((value / maxLanguage) * 100));
-      return `<div class="chart-col"><div class="chart-bar" style="height:${height}%"></div><span>${label}<br>${t("reports.countItems", { count: value })}</span></div>`;
-    })
-    .join("");
+  const languageStats = getLinkedLanguages().map((language) => [
+    displayLanguageLabel(language),
+    state.tasks.filter((task) => task.language === language.id).length,
+  ]);
+  $("#languageStats").innerHTML = renderRankedBarChart(languageStats, t("tasks.empty"));
 
   const taskStatusBreakdown = [
     { key: "todo", label: reportStatusLabel("todo"), color: "#f59e0b", value: state.tasks.filter((task) => task.status === "todo").length },
@@ -1446,6 +1465,7 @@ function renderReports() {
     total: knowledgeTotal,
     totalLabel: t("reports.knowledgeTotal"),
     emptyText: t("reports.noKnowledgeData"),
+    showGuideLabels: false,
     segments: knowledgeBreakdown.map((item) => ({
       label: item.label,
       color: item.color,
@@ -1467,6 +1487,7 @@ function renderReports() {
     total: knowledgeLangTotal,
     totalLabel: t("reports.knowledgeTotal"),
     emptyText: t("reports.noKnowledgeLang"),
+    showGuideLabels: false,
     segments: knowledgeByLang.map((item) => ({
       label: item.label,
       color: item.color,
