@@ -519,16 +519,9 @@ h3 {
 }
 
 .task-contact-cell {
-  font-size: 13px;
-  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.task-row > span:not(:first-child):not(.priority-badge) {
-  font-size: 13px;
-  color: var(--ink);
 }
 
 .intern-work-days,
@@ -583,6 +576,14 @@ h3 {
 .task-title-cell strong,
 .task-title-cell p {
   font-size: 14px;
+}
+
+.task-row .task-data-cell,
+.task-row .task-contact-cell,
+.task-row .task-assignee-select {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .task-title-cell {

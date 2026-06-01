@@ -1161,13 +1161,13 @@ function taskRow(task, compact = false) {
       </div>
       ${
         compact
-          ? `<span>${task.assignee}</span>`
+          ? `<span class="task-data-cell">${task.assignee}</span>`
           : `<select class="task-assignee-select" data-task-id="${task.id}" aria-label="${t("task.assigneeAria", { title: task.title })}">${assigneeOptions(task)}</select>`
       }
       ${compact ? "" : `<span class="task-contact-cell" title="${task.contact || t("common.notFilled")}">${task.contact || "—"}</span>`}
-      ${compact ? "" : `<span>${languageName(task.language)}</span>`}
-      <span>${displayTaskDate(task.createdAt)}</span>
-      <span>${displayDeadline(task.deadline)}</span>
+      ${compact ? "" : `<span class="task-data-cell">${languageName(task.language)}</span>`}
+      <span class="task-data-cell">${displayTaskDate(task.createdAt)}</span>
+      <span class="task-data-cell">${displayDeadline(task.deadline)}</span>
       <span class="priority-badge ${task.priority === "高" ? "high" : ""}">${displayPriority(task.priority)}</span>
       <div class="progress${task.progress >= 100 ? " progress-complete" : ""}" aria-label="${t("common.progress", { percent: task.progress })}"><span style="width:${task.progress}%"></span></div>
       ${
