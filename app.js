@@ -1103,37 +1103,104 @@ function renderRankedBarChart(items, emptyText) {
   const max = Math.max(...rows.map((row) => row.value));
   return `
     <div class="ranked-bar-chart">
+      <div class="bar-chart-scale">
+        <span>0</span>
+        <span>${t("reports.countItems", { count: max })}</span>
+      </div>
       ${rows
-        .map(
-          (row) => `
+        .map((row, index) => {
+          const percent = max ? (row.value / max) * 100 : 0;
+          const widthStyle = row.value > 0 && percent < 4 ? `width: max(8px, ${percent.toFixed(2)}%);` : `width: ${percent.toFixed(2)}%;`;
+          return `
         <div class="bar-row">
+          <span class="bar-rank">${index + 1}</span>
           <span class="bar-label" title="${escapeHtml(row.label)}">${escapeHtml(row.label)}</span>
-          <div class="bar-track" role="presentation">
-            <div class="bar-fill" style="width:${Math.max(10, Math.round((row.value / max) * 100))}%"></div>
+          <div class="bar-track" role="presentation" aria-label="${escapeHtml(row.label)} ${t("reports.countItems", { count: row.value })}">
+            <div class="bar-fill" style="${widthStyle}"></div>
           </div>
           <span class="bar-value">${t("reports.countItems", { count: row.value })}</span>
         </div>
-      `,
-        )
+      `;
+        })
         .join("")}
     </div>
   `;
+}
+
+function labelOnLeft(midAngle) {
+  const rad = ((midAngle - 90) * Math.PI) / 180;
+  return Math.cos(rad) < 0;
+}
+
+function layoutGuideLabels(entries, size, minGap = 28) {
+  const clampY = (y) => Math.max(22, Math.min(size - 22, y));
+  const placeSide = (items) => {
+    if (!items.length) return [];
+    const sorted = [...items].sort((a, b) => a.naturalY - b.naturalY);
+    const placed = [];
+    sorted.forEach((item) => {
+      let y = clampY(item.naturalY);
+      const last = placed[placed.length - 1];
+      if (last && y - last.y < minGap) y = clampY(last.y + minGap);
+      placed.push({ ...item, labelY: y });
+    });
+    const overflow = placed[placed.length - 1].labelY - (size - 22);
+    if (overflow > 0) {
+      for (let i = placed.length - 1; i >= 0; i -= 1) {
+        placed[i].labelY = clampY(placed[i].labelY - overflow);
+        if (i > 0 && placed[i].labelY - placed[i - 1].labelY < minGap) {
+          placed[i - 1].labelY = clampY(placed[i].labelY - minGap);
+        }
+      }
+    }
+    return placed;
+  };
+  return [...placeSide(entries.filter((item) => item.isLeft)), ...placeSide(entries.filter((item) => !item.isLeft))];
+}
+
+function buildDonutGuides(entries, cx, cy, ringOuter, size) {
+  const margin = 12;
+  const textXLeft = margin;
+  const textXRight = size - margin;
+  const radial = ringOuter + 26;
+  const prepared = entries.map((entry) => {
+    const anchor = polarPoint(cx, cy, ringOuter, entry.midAngle);
+    const radialPoint = polarPoint(cx, cy, radial, entry.midAngle);
+    const isLeft = labelOnLeft(entry.midAngle);
+    return {
+      ...entry,
+      anchor,
+      radialPoint,
+      isLeft,
+      naturalY: radialPoint.y,
+      textX: isLeft ? textXLeft : textXRight,
+      textAnchor: isLeft ? "start" : "end",
+    };
+  });
+  const gap = prepared.length > 3 ? 24 : 28;
+  return layoutGuideLabels(prepared, size, gap).map(
+    (item) => `
+      <path class="donut-guide" d="M ${item.anchor.x} ${item.anchor.y} L ${item.radialPoint.x} ${item.radialPoint.y} L ${item.textX} ${item.labelY}" stroke="${item.color}" fill="none"></path>
+      <text class="donut-label" x="${item.textX}" y="${item.labelY - 5}" text-anchor="${item.textAnchor}">${escapeHtml(item.label)}</text>
+      <text class="donut-label-sub" x="${item.textX}" y="${item.labelY + 11}" text-anchor="${item.textAnchor}">${escapeHtml(item.detail)}</text>
+    `,
+  );
 }
 
 function renderDonutStat({ total, segments, totalLabel, emptyText, showGuideLabels = true }) {
   if (!total || !segments.length) {
     return `<div class="empty-row">${emptyText}</div>`;
   }
-  const size = 280;
+  const size = 320;
   const cx = size / 2;
   const cy = size / 2;
-  const radius = 54;
-  const strokeWidth = 20;
+  const radius = 50;
+  const strokeWidth = 18;
   const ringOuter = radius + strokeWidth / 2;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
   let startAngle = 0;
-  const guides = [];
+  const guideEntries = [];
 
   const circles = segments
     .map((segment) => {
@@ -1144,24 +1211,21 @@ function renderDonutStat({ total, segments, totalLabel, emptyText, showGuideLabe
       const circle = `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${segment.color}" stroke-width="${strokeWidth}" stroke-dasharray="${length} ${circumference}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
       offset += length;
 
-      if (showGuideLabels && ratio >= 0.08 && sweep >= 28) {
-        const anchor = polarPoint(cx, cy, ringOuter, midAngle);
-        const elbow = polarPoint(cx, cy, ringOuter + 22, midAngle);
-        const isLeft = midAngle > 90 && midAngle < 270;
-        const textX = isLeft ? 18 : size - 18;
-        const textAnchor = isLeft ? "start" : "end";
-        const labelY = elbow.y;
-        guides.push(`
-          <path class="donut-guide" d="M ${anchor.x} ${anchor.y} L ${elbow.x} ${elbow.y} L ${textX} ${elbow.y}" stroke="${segment.color}" fill="none"></path>
-          <text class="donut-label" x="${textX}" y="${labelY - 4}" text-anchor="${textAnchor}">${escapeHtml(segment.label)}</text>
-          <text class="donut-label-sub" x="${textX}" y="${labelY + 10}" text-anchor="${textAnchor}">${escapeHtml(segment.detail)}</text>
-        `);
+      if (showGuideLabels && segment.value > 0) {
+        guideEntries.push({
+          midAngle,
+          label: segment.label,
+          detail: segment.detail,
+          color: segment.color,
+        });
       }
 
       startAngle += sweep;
       return circle;
     })
     .join("");
+
+  const guides = showGuideLabels ? buildDonutGuides(guideEntries, cx, cy, ringOuter, size) : [];
 
   return `
     <article class="donut-stat donut-stat-labeled">
@@ -1465,7 +1529,6 @@ function renderReports() {
     total: knowledgeTotal,
     totalLabel: t("reports.knowledgeTotal"),
     emptyText: t("reports.noKnowledgeData"),
-    showGuideLabels: false,
     segments: knowledgeBreakdown.map((item) => ({
       label: item.label,
       color: item.color,
@@ -1487,7 +1550,6 @@ function renderReports() {
     total: knowledgeLangTotal,
     totalLabel: t("reports.knowledgeTotal"),
     emptyText: t("reports.noKnowledgeLang"),
-    showGuideLabels: false,
     segments: knowledgeByLang.map((item) => ({
       label: item.label,
       color: item.color,
