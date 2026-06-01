@@ -723,12 +723,45 @@ function closeProductCenterEditor() {
   $("#productCenterForm").reset();
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderTextWithLinks(value) {
+  const text = String(value ?? "");
+  if (!text) return "";
+  const urlPattern = /(?:https?:\/\/|www\.)[^\s<]+/gi;
+  let output = "";
+  let cursor = 0;
+  for (const match of text.matchAll(urlPattern)) {
+    const raw = match[0];
+    const start = match.index ?? 0;
+    let end = start + raw.length;
+    while (end > start && /[),.;:!?。，、；：！）】》]/.test(text[end - 1])) {
+      end -= 1;
+    }
+    const normalizedRaw = text.slice(start, end);
+    output += escapeHtml(text.slice(cursor, start));
+    const href = normalizedRaw.startsWith("http") ? normalizedRaw : `https://${normalizedRaw}`;
+    output += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(normalizedRaw)}</a>`;
+    output += escapeHtml(text.slice(end, start + raw.length));
+    cursor = start + raw.length;
+  }
+  output += escapeHtml(text.slice(cursor));
+  return output;
+}
+
 function taskDescription(task) {
   const isLong = task.description.length > 42;
   const expanded = expandedTaskDescriptions.has(task.id);
   const text = isLong && !expanded ? `${task.description.slice(0, 42)}...` : task.description;
   return `
-    <p>${text}</p>
+    <p>${renderTextWithLinks(text)}</p>
     ${isLong ? `<button class="text-button" data-action="toggle-task-description" data-id="${task.id}">${expanded ? t("tasks.collapseDesc") : t("tasks.expand")}</button>` : ""}
   `;
 }
