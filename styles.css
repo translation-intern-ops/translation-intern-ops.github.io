@@ -834,6 +834,37 @@ h3 {
   padding: 18px 20px 20px;
 }
 
+.modal-card-migration {
+  width: min(560px, 96vw);
+}
+
+.modal-card-migration .modal-head {
+  margin-bottom: 12px;
+}
+
+.modal-card-migration .modal-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.migration-notice-text {
+  margin: 0 0 18px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.migration-notice-text a {
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.migration-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .modal-card-task {
   width: min(680px, 96vw);
 }

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260601k" />
+    <link rel="stylesheet" href="styles.css?v=20260603a" />
   </head>
   <body>
     <div class="app-shell hidden">
@@ -286,6 +286,22 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+    <div class="modal hidden" id="migrationNoticeModal" role="dialog" aria-modal="true" aria-labelledby="migrationNoticeTitle">
+      <div class="modal-card modal-card-migration">
+        <div class="modal-head">
+          <h2 id="migrationNoticeTitle">网站迁移通知</h2>
+        </div>
+        <p class="migration-notice-text">
+          出于对数据的保护，本网站迁移至（采用公司官方发布的部署方法）
+          <a id="migrationNoticeLink" href="http://translation-intern-ops-pre-vibe-zlf-11097.prelb-7.matrix-app.meitu-int.com/" rel="noopener noreferrer">http://translation-intern-ops-pre-vibe-zlf-11097.prelb-7.matrix-app.meitu-int.com/</a>
+        </p>
+        <div class="migration-notice-actions">
+          <a id="migrationNoticeGoBtn" class="btn-save" href="http://translation-intern-ops-pre-vibe-zlf-11097.prelb-7.matrix-app.meitu-int.com/">前往新站点</a>
+          <button type="button" id="dismissMigrationNotice" class="btn-secondary">我知道了</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal hidden" id="syncSetupModal" role="dialog" aria-modal="true" aria-labelledby="syncSetupTitle">
       <div class="modal-card sync-setup-card">
         <div class="modal-head">
@@ -317,11 +333,15 @@
       </div>
     </div>
 
-    <script src="i18n.js?v=20260601k"></script>
-    <script src="sync-config.js?v=20260601k"></script>
-    <script src="cloud-sync.js?v=20260601k"></script>
-    <script src="secure-storage.js?v=20260601k"></script>
-    <script src="auth.js?v=20260601k"></script>
-    <script src="app.js?v=20260601k"></script>
+    <script src="migration-notice.js?v=20260603a"></script>
+    <script src="i18n.js?v=20260603a"></script>
+    <script src="api-config.js?v=20260603a"></script>
+    <script src="sync-config.js?v=20260603a"></script>
+    <script src="cloud-sync.js?v=20260603a"></script>
+    <script src="crypto-provider.js?v=20260603a"></script>
+    <script src="api-storage.js?v=20260603a"></script>
+    <script src="secure-storage.js?v=20260603a"></script>
+    <script src="auth.js?v=20260603a"></script>
+    <script src="app.js?v=20260603a"></script>
   </body>
 </html>
