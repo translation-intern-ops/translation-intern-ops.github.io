@@ -23,7 +23,11 @@ const collapsedKnowledgeCategories = new Set();
 /** 当前展开正文的卡片 id；null 表示全部收起 */
 let expandedGuideCardId = null;
 const expandedGuideContentIds = new Set();
-let guideDragId = null;
+const guideSortDrag = {
+  active: false,
+  dragId: null,
+  pointerId: null,
+};
 const GUIDE_PREVIEW_CHARS = 200;
 const expandedTaskDescriptions = new Set();
 
@@ -1130,55 +1134,66 @@ function toggleGuideCardFold(id) {
   renderGuides();
 }
 
+function clearGuideSortDragUi(list = $("#guideList")) {
+  guideSortDrag.active = false;
+  guideSortDrag.dragId = null;
+  guideSortDrag.pointerId = null;
+  list?.querySelectorAll(".guide-card-dragging, .guide-card-drag-over").forEach((el) => {
+    el.classList.remove("guide-card-dragging", "guide-card-drag-over");
+  });
+}
+
+function guideCardAtPoint(clientX, clientY) {
+  const el = document.elementFromPoint(clientX, clientY);
+  return el?.closest?.(".guide-card") ?? null;
+}
+
 function mountGuideDragDrop() {
   const list = $("#guideList");
-  if (!list || list.dataset.dragBound === "1") return;
-  list.dataset.dragBound = "1";
+  if (!list || list.dataset.sortBound === "1") return;
+  list.dataset.sortBound = "1";
 
-  list.addEventListener("dragstart", (event) => {
-    if (editingGuideId) {
-      event.preventDefault();
-      return;
-    }
-    const card = event.target.closest(".guide-card");
-    if (!card || !event.target.closest("[data-drag-handle]")) {
-      event.preventDefault();
-      return;
-    }
-    guideDragId = Number(card.dataset.guideCard);
+  list.addEventListener("pointerdown", (event) => {
+    if (editingGuideId) return;
+    const handle = event.target.closest("[data-drag-handle]");
+    if (!handle || event.button !== 0) return;
+    const card = handle.closest(".guide-card");
+    if (!card) return;
+
+    guideSortDrag.active = true;
+    guideSortDrag.dragId = Number(card.dataset.guideCard);
+    guideSortDrag.pointerId = event.pointerId;
     card.classList.add("guide-card-dragging");
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(guideDragId));
-  });
-
-  list.addEventListener("dragend", () => {
-    guideDragId = null;
-    list.querySelectorAll(".guide-card-dragging, .guide-card-drag-over").forEach((el) => {
-      el.classList.remove("guide-card-dragging", "guide-card-drag-over");
-    });
-  });
-
-  list.addEventListener("dragover", (event) => {
-    if (!guideDragId) return;
+    handle.setPointerCapture(event.pointerId);
     event.preventDefault();
-    const card = event.target.closest(".guide-card");
+  });
+
+  list.addEventListener("pointermove", (event) => {
+    if (!guideSortDrag.active || event.pointerId !== guideSortDrag.pointerId) return;
+    const over = guideCardAtPoint(event.clientX, event.clientY);
     list.querySelectorAll(".guide-card-drag-over").forEach((el) => el.classList.remove("guide-card-drag-over"));
-    if (card && Number(card.dataset.guideCard) !== guideDragId) {
-      card.classList.add("guide-card-drag-over");
+    if (over && Number(over.dataset.guideCard) !== guideSortDrag.dragId) {
+      over.classList.add("guide-card-drag-over");
     }
   });
 
-  list.addEventListener("drop", (event) => {
-    event.preventDefault();
-    const targetCard = event.target.closest(".guide-card");
-    if (!targetCard || !guideDragId) return;
-    const targetId = Number(targetCard.dataset.guideCard);
-    if (targetId === guideDragId) return;
-    reorderGuides(guideDragId, targetId);
-    guideDragId = null;
-    persistData();
-    renderGuides();
-    showToast(t("toast.guideReordered"));
+  const finishSort = (event) => {
+    if (!guideSortDrag.active || event.pointerId !== guideSortDrag.pointerId) return;
+    const dragId = guideSortDrag.dragId;
+    const targetCard = guideCardAtPoint(event.clientX, event.clientY);
+    const targetId = targetCard ? Number(targetCard.dataset.guideCard) : null;
+    clearGuideSortDragUi(list);
+    if (targetId && dragId && targetId !== dragId) {
+      reorderGuides(dragId, targetId);
+      persistData();
+      renderGuides();
+      showToast(t("toast.guideReordered"));
+    }
+  };
+
+  list.addEventListener("pointerup", finishSort);
+  list.addEventListener("pointercancel", (event) => {
+    if (event.pointerId === guideSortDrag.pointerId) clearGuideSortDragUi(list);
   });
 }
 
@@ -1199,9 +1214,9 @@ function renderGuides() {
       const foldLabel = folded ? t("guides.unfoldCard") : t("guides.foldCard");
       const isEditing = editingGuideId === guide.id;
       return `
-        <article class="guide-card${guide.pinned ? " guide-card-pinned" : ""}${isEditing ? " guide-card-editing" : ""}" data-guide-card="${guide.id}" draggable="${isEditing ? "false" : "true"}">
+        <article class="guide-card${guide.pinned ? " guide-card-pinned" : ""}${isEditing ? " guide-card-editing" : ""}" data-guide-card="${guide.id}">
           <div class="guide-card-head">
-            <button type="button" class="guide-drag-handle" data-drag-handle draggable="false" aria-label="${t("guides.dragHandle")}" title="${t("guides.dragHandle")}">⋮⋮</button>
+            <div class="guide-drag-handle" data-drag-handle role="button" tabindex="0" aria-label="${t("guides.dragHandle")}" title="${t("guides.dragHandle")}">⋮⋮</div>
             <div class="guide-card-title-wrap">
               <h3 class="guide-card-title">${escapeHtml(guide.title)}</h3>
               <span class="guide-meta">${escapeHtml(typeLabel)} · ${escapeHtml(guide.createdAt)}</span>
