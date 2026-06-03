@@ -20,8 +20,10 @@ let editingTaskId = null;
 let editingGuideId = null;
 const collapsedMonths = new Set();
 const collapsedKnowledgeCategories = new Set();
-const collapsedGuideIds = new Set();
+/** 当前展开正文的卡片 id；null 表示全部收起 */
+let expandedGuideCardId = null;
 const expandedGuideContentIds = new Set();
+let guideDragId = null;
 const GUIDE_PREVIEW_CHARS = 200;
 const expandedTaskDescriptions = new Set();
 
@@ -990,8 +992,9 @@ function migrateState() {
   allKnowledgeEntries().forEach((item) => {
     if (!item.submitter) item.submitter = "未填写";
   });
-  state.guides.forEach((guide) => {
+  state.guides.forEach((guide, index) => {
     if (guide.pinned === undefined) guide.pinned = false;
+    if (guide.sortOrder === undefined) guide.sortOrder = index;
   });
   syncKnowledgeLanguages();
 }
@@ -1009,7 +1012,7 @@ function openGuideForm() {
 }
 
 function startInlineGuideEdit(id) {
-  collapsedGuideIds.delete(id);
+  expandedGuideCardId = id;
   editingGuideId = id;
   $("#guideForm").classList.add("hidden");
   $("#guideForm").reset();
@@ -1080,6 +1083,105 @@ function guideCardBodyHtml(guide) {
   `;
 }
 
+function sortedGuidesList() {
+  const pinned = state.guides
+    .filter((g) => g.pinned)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  const rest = state.guides
+    .filter((g) => !g.pinned)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  return [...pinned, ...rest];
+}
+
+function normalizeGuideSortOrder() {
+  const pinned = state.guides.filter((g) => g.pinned);
+  const rest = state.guides.filter((g) => !g.pinned);
+  pinned.forEach((g, i) => {
+    g.sortOrder = i;
+  });
+  rest.forEach((g, i) => {
+    g.sortOrder = i;
+  });
+  state.guides = [...pinned, ...rest];
+}
+
+function reorderGuides(dragId, targetId) {
+  const drag = state.guides.find((g) => g.id === dragId);
+  const target = state.guides.find((g) => g.id === targetId);
+  if (!drag || !target || Boolean(drag.pinned) !== Boolean(target.pinned)) return;
+  const pinned = state.guides.filter((g) => g.pinned);
+  const rest = state.guides.filter((g) => !g.pinned);
+  const group = drag.pinned ? pinned : rest;
+  const other = drag.pinned ? rest : pinned;
+  const from = group.findIndex((g) => g.id === dragId);
+  const to = group.findIndex((g) => g.id === targetId);
+  if (from < 0 || to < 0 || from === to) return;
+  const [item] = group.splice(from, 1);
+  group.splice(to, 0, item);
+  group.forEach((g, i) => {
+    g.sortOrder = i;
+  });
+  state.guides = drag.pinned ? [...group, ...other] : [...other, ...group];
+}
+
+function toggleGuideCardFold(id) {
+  if (expandedGuideCardId === id) expandedGuideCardId = null;
+  else expandedGuideCardId = id;
+  renderGuides();
+}
+
+function mountGuideDragDrop() {
+  const list = $("#guideList");
+  if (!list || list.dataset.dragBound === "1") return;
+  list.dataset.dragBound = "1";
+
+  list.addEventListener("dragstart", (event) => {
+    if (editingGuideId) {
+      event.preventDefault();
+      return;
+    }
+    const card = event.target.closest(".guide-card");
+    if (!card || !event.target.closest("[data-drag-handle]")) {
+      event.preventDefault();
+      return;
+    }
+    guideDragId = Number(card.dataset.guideCard);
+    card.classList.add("guide-card-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(guideDragId));
+  });
+
+  list.addEventListener("dragend", () => {
+    guideDragId = null;
+    list.querySelectorAll(".guide-card-dragging, .guide-card-drag-over").forEach((el) => {
+      el.classList.remove("guide-card-dragging", "guide-card-drag-over");
+    });
+  });
+
+  list.addEventListener("dragover", (event) => {
+    if (!guideDragId) return;
+    event.preventDefault();
+    const card = event.target.closest(".guide-card");
+    list.querySelectorAll(".guide-card-drag-over").forEach((el) => el.classList.remove("guide-card-drag-over"));
+    if (card && Number(card.dataset.guideCard) !== guideDragId) {
+      card.classList.add("guide-card-drag-over");
+    }
+  });
+
+  list.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const targetCard = event.target.closest(".guide-card");
+    if (!targetCard || !guideDragId) return;
+    const targetId = Number(targetCard.dataset.guideCard);
+    if (targetId === guideDragId) return;
+    reorderGuides(guideDragId, targetId);
+    guideDragId = null;
+    persistData();
+    renderGuides();
+    showToast(t("toast.guideReordered"));
+  });
+}
+
 function renderGuides() {
   const list = $("#guideList");
   if (!list) return;
@@ -1087,21 +1189,19 @@ function renderGuides() {
     list.innerHTML = `<div class="empty-row">${t("guides.empty")}</div>`;
     return;
   }
-  const sortedGuides = [...state.guides].sort((a, b) => {
-    if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
-    return Number(b.id) - Number(a.id);
-  });
+  const sortedGuides = sortedGuidesList();
   list.innerHTML = sortedGuides
     .map((guide) => {
-      const folded = collapsedGuideIds.has(guide.id);
+      const folded = expandedGuideCardId !== guide.id;
       const typeLabel = guide.type === "file" ? t("guides.typeUploaded", { file: guide.fileName }) : t("guides.typeCreated");
       const pinAction = guide.pinned ? "unpin-guide" : "pin-guide";
       const pinLabel = guide.pinned ? t("guides.unpin") : t("guides.pin");
       const foldLabel = folded ? t("guides.unfoldCard") : t("guides.foldCard");
       const isEditing = editingGuideId === guide.id;
       return `
-        <article class="guide-card${guide.pinned ? " guide-card-pinned" : ""}${isEditing ? " guide-card-editing" : ""}" data-guide-card="${guide.id}">
+        <article class="guide-card${guide.pinned ? " guide-card-pinned" : ""}${isEditing ? " guide-card-editing" : ""}" data-guide-card="${guide.id}" draggable="${isEditing ? "false" : "true"}">
           <div class="guide-card-head">
+            <button type="button" class="guide-drag-handle" data-drag-handle draggable="false" aria-label="${t("guides.dragHandle")}" title="${t("guides.dragHandle")}">⋮⋮</button>
             <div class="guide-card-title-wrap">
               <h3 class="guide-card-title">${escapeHtml(guide.title)}</h3>
               <span class="guide-meta">${escapeHtml(typeLabel)} · ${escapeHtml(guide.createdAt)}</span>
@@ -1129,6 +1229,7 @@ function renderGuides() {
       `;
     })
     .join("");
+  mountGuideDragDrop();
 }
 
 function addImportedTasks(items, fallbackMonth = "") {
@@ -2087,7 +2188,10 @@ document.addEventListener("click", (event) => {
     openGuideViewModal(guide);
   }
   if (action === "toggle-guide-content") {
-    const id = Number(event.target.dataset.id);
+    const btn = event.target.closest("[data-action='toggle-guide-content']");
+    const id = Number(btn?.dataset.id);
+    if (!id) return;
+    event.stopPropagation();
     if (expandedGuideContentIds.has(id)) expandedGuideContentIds.delete(id);
     else expandedGuideContentIds.add(id);
     renderGuides();
@@ -2106,6 +2210,7 @@ document.addEventListener("click", (event) => {
     const guide = state.guides.find((item) => item.id === id);
     if (!guide) return;
     guide.pinned = !guide.pinned;
+    normalizeGuideSortOrder();
     persistData();
     renderGuides();
     showToast(guide.pinned ? t("toast.guidePinned") : t("toast.guideUnpinned"));
@@ -2114,17 +2219,18 @@ document.addEventListener("click", (event) => {
     const id = Number(event.target.dataset.id);
     state.guides = state.guides.filter((item) => item.id !== id);
     if (editingGuideId === id) closeGuideForm();
-    collapsedGuideIds.delete(id);
+    if (expandedGuideCardId === id) expandedGuideCardId = null;
     expandedGuideContentIds.delete(id);
     persistData();
     renderGuides();
     showToast(t("toast.guideDeleted"));
   }
   if (action === "toggle-guide-fold") {
-    const id = Number(event.target.dataset.id);
-    if (collapsedGuideIds.has(id)) collapsedGuideIds.delete(id);
-    else collapsedGuideIds.add(id);
-    renderGuides();
+    const btn = event.target.closest("[data-action='toggle-guide-fold']");
+    const id = Number(btn?.dataset.id);
+    if (!id) return;
+    event.stopPropagation();
+    toggleGuideCardFold(id);
   }
 });
 
@@ -2302,16 +2408,23 @@ $("#guideForm").addEventListener("submit", (event) => {
     showToast(t("toast.guideRequired"));
     return;
   }
-  state.guides.unshift({
-    id: Date.now(),
-    title,
-    content,
-    type: "text",
-    fileName: "",
-    createdAt: todayLabel(),
-    pinned: false,
-  });
-  showToast(t("toast.guideCreated"));
+  const pinned = state.guides.filter((g) => g.pinned);
+    const rest = state.guides.filter((g) => !g.pinned);
+    rest.forEach((g) => {
+      g.sortOrder = (g.sortOrder ?? 0) + 1;
+    });
+    const newGuide = {
+      id: Date.now(),
+      title,
+      content,
+      type: "text",
+      fileName: "",
+      createdAt: todayLabel(),
+      pinned: false,
+      sortOrder: 0,
+    };
+    state.guides = [...pinned, newGuide, ...rest];
+    showToast(t("toast.guideCreated"));
   closeGuideForm();
   persistData();
   renderGuides();
@@ -2330,7 +2443,12 @@ $("#guideFileInput").addEventListener("change", async (event) => {
     const lowerName = file.name.toLowerCase();
     const isOfficeDoc = [".doc", ".docx", ".xls", ".xlsx"].some((ext) => lowerName.endsWith(ext));
     const content = isOfficeDoc ? t("guides.uploadedFile", { file: file.name }) : await file.text();
-    state.guides.unshift({
+    const pinned = state.guides.filter((g) => g.pinned);
+    const rest = state.guides.filter((g) => !g.pinned);
+    rest.forEach((g) => {
+      g.sortOrder = (g.sortOrder ?? 0) + 1;
+    });
+    const newGuide = {
       id: Date.now(),
       title: file.name.replace(/\.[^.]+$/, "") || file.name,
       content,
@@ -2338,7 +2456,9 @@ $("#guideFileInput").addEventListener("change", async (event) => {
       fileName: file.name,
       createdAt: todayLabel(),
       pinned: false,
-    });
+      sortOrder: 0,
+    };
+    state.guides = [...pinned, newGuide, ...rest];
     persistData();
     renderGuides();
     switchView("guides");

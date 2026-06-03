@@ -1039,12 +1039,44 @@ h3 {
   box-shadow: var(--shadow-sm);
 }
 
+.guide-card-dragging {
+  opacity: 0.55;
+}
+
+.guide-card-drag-over {
+  outline: 2px dashed rgba(139, 92, 246, 0.55);
+  outline-offset: 2px;
+}
+
 .guide-card-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.guide-drag-handle {
+  flex-shrink: 0;
+  border: 0;
+  padding: 2px 6px;
+  margin-top: 2px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: -2px;
+  cursor: grab;
+  border-radius: 4px;
+}
+
+.guide-drag-handle:hover {
+  color: var(--accent-deep);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.guide-drag-handle:active {
+  cursor: grabbing;
 }
 
 .guide-card-title-wrap {
