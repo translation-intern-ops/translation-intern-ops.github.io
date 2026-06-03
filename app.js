@@ -1002,11 +1002,35 @@ function closeGuideForm() {
   $("#guideForm").classList.add("hidden");
 }
 
-function openGuideForm(guide = null) {
-  editingGuideId = guide?.id ?? null;
+function openGuideForm() {
+  editingGuideId = null;
+  $("#guideForm").reset();
   $("#guideForm").classList.remove("hidden");
-  $("#guideForm").elements.title.value = guide?.title ?? "";
-  $("#guideForm").elements.content.value = guide?.content ?? "";
+}
+
+function startInlineGuideEdit(id) {
+  collapsedGuideIds.delete(id);
+  editingGuideId = id;
+  $("#guideForm").classList.add("hidden");
+  $("#guideForm").reset();
+  renderGuides();
+  const form = $(`.guide-inline-form[data-guide-id="${id}"]`);
+  const guide = state.guides.find((item) => item.id === id);
+  if (form && guide) {
+    form.elements.content.value = guide.content ?? "";
+    form.elements.title?.focus();
+  }
+}
+
+function saveInlineGuideEdit(id, title, content) {
+  const guide = state.guides.find((item) => item.id === id);
+  if (!guide) return;
+  guide.title = title;
+  guide.content = content;
+  editingGuideId = null;
+  persistData();
+  renderGuides();
+  showToast(t("toast.guideUpdated"));
 }
 
 function closeGuideViewModal() {
@@ -1020,6 +1044,25 @@ function openGuideViewModal(guide) {
   const body = $("#guideViewBody");
   if (body) body.innerHTML = renderTextWithLinks(guide.content ?? "");
   modal.classList.remove("hidden");
+}
+
+function guideInlineEditHtml(guide) {
+  return `
+    <form class="guide-inline-form" data-guide-id="${guide.id}">
+      <label class="guide-inline-label">
+        <span data-i18n="guides.docTitlePh">${t("guides.docTitlePh")}</span>
+        <input name="title" type="text" value="${escapeHtml(guide.title)}" required />
+      </label>
+      <label class="guide-inline-label">
+        <span data-i18n="guides.docContentPh">${t("guides.docContentPh")}</span>
+        <textarea name="content" rows="8" required></textarea>
+      </label>
+      <div class="guide-inline-actions">
+        <button type="submit" class="btn-save" data-i18n="common.save">${t("common.save")}</button>
+        <button type="button" class="btn-secondary" data-action="cancel-inline-guide" data-id="${guide.id}" data-i18n="common.cancel">${t("common.cancel")}</button>
+      </div>
+    </form>
+  `;
 }
 
 function guideCardBodyHtml(guide) {
@@ -1055,23 +1098,32 @@ function renderGuides() {
       const pinAction = guide.pinned ? "unpin-guide" : "pin-guide";
       const pinLabel = guide.pinned ? t("guides.unpin") : t("guides.pin");
       const foldLabel = folded ? t("guides.unfoldCard") : t("guides.foldCard");
+      const isEditing = editingGuideId === guide.id;
       return `
-        <article class="guide-card${guide.pinned ? " guide-card-pinned" : ""}">
+        <article class="guide-card${guide.pinned ? " guide-card-pinned" : ""}${isEditing ? " guide-card-editing" : ""}" data-guide-card="${guide.id}">
           <div class="guide-card-head">
             <div class="guide-card-title-wrap">
               <h3 class="guide-card-title">${escapeHtml(guide.title)}</h3>
               <span class="guide-meta">${escapeHtml(typeLabel)} · ${escapeHtml(guide.createdAt)}</span>
             </div>
-            <button type="button" class="text-button guide-fold-btn" data-action="toggle-guide-fold" data-id="${guide.id}" aria-expanded="${!folded}">${foldLabel}</button>
+            ${
+              isEditing
+                ? ""
+                : `<button type="button" class="text-button guide-fold-btn" data-action="toggle-guide-fold" data-id="${guide.id}" aria-expanded="${!folded}">${foldLabel}</button>`
+            }
           </div>
-          <div class="guide-card-content ${folded ? "hidden" : ""}">
-            ${guideCardBodyHtml(guide)}
+          <div class="guide-card-content ${folded && !isEditing ? "hidden" : ""}">
+            ${
+              isEditing
+                ? guideInlineEditHtml(guide)
+                : `${guideCardBodyHtml(guide)}
             <div class="row-actions guide-card-actions">
               <button type="button" data-action="view-guide" data-id="${guide.id}">${t("guides.viewFull")}</button>
               <button type="button" data-action="toggle-pin-guide" data-id="${guide.id}" data-pin-action="${pinAction}">${pinLabel}</button>
               <button type="button" data-action="edit-guide" data-id="${guide.id}">${t("common.edit")}</button>
               <button type="button" data-action="delete-guide" data-id="${guide.id}">${t("common.delete")}</button>
-            </div>
+            </div>`
+            }
           </div>
         </article>
       `;
@@ -1893,12 +1945,15 @@ document.addEventListener("click", (event) => {
   }
 
   if (event.target.id === "openGuideForm") {
-    editingGuideId = null;
+    const wasInline = editingGuideId !== null;
     openGuideForm();
+    if (wasInline) renderGuides();
   }
 
   if (event.target.id === "cancelGuideEdit") {
+    const wasInline = editingGuideId !== null;
     closeGuideForm();
+    if (wasInline) renderGuides();
   }
 
   const monthToggle = event.target.closest(".month-toggle");
@@ -2039,10 +2094,12 @@ document.addEventListener("click", (event) => {
   }
   if (action === "edit-guide") {
     const id = Number(event.target.dataset.id);
-    const guide = state.guides.find((item) => item.id === id);
-    if (!guide) return;
-    openGuideForm(guide);
-    switchView("guides");
+    if (!state.guides.some((item) => item.id === id)) return;
+    startInlineGuideEdit(id);
+  }
+  if (action === "cancel-inline-guide") {
+    editingGuideId = null;
+    renderGuides();
   }
   if (action === "toggle-pin-guide") {
     const id = Number(event.target.dataset.id);
@@ -2222,6 +2279,20 @@ $("#importTaskForm").addEventListener("submit", (event) => {
   showToast(t("toast.imported", { count: items.length }));
 });
 
+$("#guideList")?.addEventListener("submit", (event) => {
+  const form = event.target.closest(".guide-inline-form");
+  if (!form) return;
+  event.preventDefault();
+  const id = Number(form.dataset.guideId);
+  const title = form.elements.title?.value?.trim() ?? "";
+  const content = form.elements.content?.value?.trim() ?? "";
+  if (!title || !content) {
+    showToast(t("toast.guideRequired"));
+    return;
+  }
+  saveInlineGuideEdit(id, title, content);
+});
+
 $("#guideForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -2231,25 +2302,16 @@ $("#guideForm").addEventListener("submit", (event) => {
     showToast(t("toast.guideRequired"));
     return;
   }
-  if (editingGuideId) {
-    const guide = state.guides.find((item) => item.id === editingGuideId);
-    if (guide) {
-      guide.title = title;
-      guide.content = content;
-    }
-    showToast(t("toast.guideUpdated"));
-  } else {
-    state.guides.unshift({
-      id: Date.now(),
-      title,
-      content,
-      type: "text",
-      fileName: "",
-      createdAt: todayLabel(),
-      pinned: false,
-    });
-    showToast(t("toast.guideCreated"));
-  }
+  state.guides.unshift({
+    id: Date.now(),
+    title,
+    content,
+    type: "text",
+    fileName: "",
+    createdAt: todayLabel(),
+    pinned: false,
+  });
+  showToast(t("toast.guideCreated"));
   closeGuideForm();
   persistData();
   renderGuides();

@@ -994,6 +994,46 @@ h3 {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+.guide-card-editing {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: var(--shadow-sm);
+  grid-column: 1 / -1;
+}
+
+.guide-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guide-inline-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.guide-inline-label input,
+.guide-inline-label textarea {
+  width: 100%;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.guide-inline-label textarea {
+  min-height: 160px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.guide-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .guide-card:hover {
   border-color: rgba(139, 92, 246, 0.3);
   box-shadow: var(--shadow-sm);
