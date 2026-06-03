@@ -972,15 +972,26 @@ h3 {
 
 .guide-list {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 
 .guide-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 16px;
   background: var(--panel-muted);
   transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.guide-card-pinned {
+  border-color: rgba(139, 92, 246, 0.45);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .guide-card:hover {
@@ -992,40 +1003,105 @@ h3 {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-.guide-card-head strong {
-  font-size: 15px;
+.guide-card-title-wrap {
+  flex: 1;
+  min-width: 0;
 }
 
-.guide-title-button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--ink);
+.guide-card-title {
+  margin: 0 0 4px;
   font-size: 15px;
   font-weight: 700;
-  text-align: left;
+  line-height: 1.35;
+  color: var(--ink);
+  word-break: break-word;
 }
 
-.guide-title-button:hover {
-  color: var(--accent-deep);
+.guide-fold-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .guide-meta {
   color: var(--muted);
   font-size: 12px;
-  white-space: nowrap;
+  line-height: 1.4;
 }
 
-.guide-card p {
+.guide-card-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 10px;
+}
+
+.guide-card-body {
   margin: 0;
-  color: var(--muted);
+  color: var(--text);
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.guide-card-body a {
+  color: var(--accent-deep);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+.guide-card-actions {
+  margin-top: auto;
+  padding-top: 4px;
+  flex-wrap: wrap;
+}
+
+.modal-card-guide-view {
+  width: min(720px, 96vw);
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-card-guide-view .panel-head {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-card-guide-view .panel-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.35;
+  word-break: break-word;
+  padding-right: 12px;
+}
+
+.guide-view-body {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: min(70vh, 560px);
+  padding: 4px 2px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.guide-view-body a {
+  color: var(--accent-deep);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
 }
 
 .task-form textarea {

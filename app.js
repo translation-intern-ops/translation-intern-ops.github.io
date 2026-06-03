@@ -21,6 +21,8 @@ let editingGuideId = null;
 const collapsedMonths = new Set();
 const collapsedKnowledgeCategories = new Set();
 const collapsedGuideIds = new Set();
+const expandedGuideContentIds = new Set();
+const GUIDE_PREVIEW_CHARS = 200;
 const expandedTaskDescriptions = new Set();
 
 const defaultState = {
@@ -166,6 +168,85 @@ function defaultPayload() {
   };
 }
 
+let apiLastUpdatedAt = "";
+
+async function bootstrapApiData() {
+  try {
+    const remote = await ApiStorage.fetchPayload();
+    apiLastUpdatedAt = remote.updatedAt ?? "";
+    let payload = remote.payload;
+    if (payload?.legacyVault) {
+      window.__pendingLegacyVault = payload.legacyVault;
+      if (ApiStorage.readSession()) {
+        await ApiStorage.logout();
+        hideAppShell();
+        if (typeof renderAuthGate === "function") {
+          renderAuthGate(true);
+        }
+      }
+      showToast(t("toast.legacyVaultLogin"));
+      return;
+    }
+    if (ApiStorage.isEmptyPayload(payload)) {
+      applyVaultPayload(defaultPayload());
+      return;
+    }
+    applyVaultPayload({
+      state: payload.state,
+      productCenters: payload.productCenters,
+      languages: payload.languages,
+    });
+  } catch {
+    showToast(t("toast.loadFailed"));
+    setTimeout(() => window.location.reload(), 1500);
+  }
+}
+
+async function refreshFromApi({ silent = false } = {}) {
+  if (!window.__apiStorageMode || typeof ApiStorage === "undefined") return false;
+  try {
+    const remote = await ApiStorage.fetchPayload();
+    const updatedAt = remote.updatedAt ?? "";
+    if (updatedAt && updatedAt === apiLastUpdatedAt) return false;
+    apiLastUpdatedAt = updatedAt;
+    const payload = remote.payload;
+    if (ApiStorage.isEmptyPayload(payload) || payload?.legacyVault) return false;
+    applyVaultPayload({
+      state: payload.state,
+      productCenters: payload.productCenters,
+      languages: payload.languages,
+    });
+    migrateState();
+    renderAll();
+    if (!silent && Date.now() - lastSyncToastAt > 8000) {
+      lastSyncToastAt = Date.now();
+      showToast(t("toast.syncUpdated"));
+    }
+    updateSyncStatus("online");
+    return true;
+  } catch {
+    updateSyncStatus("error");
+    return false;
+  }
+}
+
+function startApiPolling() {
+  if (!window.__apiStorageMode) return;
+  clearInterval(syncPollTimer);
+  syncPollTimer = setInterval(() => {
+    void refreshFromApi({ silent: true });
+  }, 8000);
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (document.visibilityState === "visible") {
+        void refreshFromApi({ silent: true });
+      }
+    },
+    { passive: true },
+  );
+}
+
 async function bootstrapSecureData(key) {
   const payload = await SecureStorage.loadVault(key);
   if (payload) {
@@ -257,6 +338,27 @@ function startCloudPolling(key) {
 function mountSyncStatus() {
   void updateSyncStatus();
   updateSyncBanner();
+  mountApiBackupButton();
+}
+
+function mountApiBackupButton() {
+  if (!window.__apiStorageMode || typeof ApiStorage === "undefined") return;
+  const toolbar = document.querySelector(".toolbar");
+  if (!toolbar || document.getElementById("exportBackupBtn")) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "exportBackupBtn";
+  button.className = "btn-secondary";
+  button.textContent = t("sync.export");
+  button.addEventListener("click", async () => {
+    try {
+      await ApiStorage.exportBackup();
+      showToast(t("toast.backupExported"));
+    } catch {
+      showToast(t("toast.syncFailed"));
+    }
+  });
+  toolbar.insertBefore(button, document.getElementById("openSyncSetupBtn"));
 }
 
 function updateSyncBanner() {
@@ -336,6 +438,33 @@ async function updateSyncStatus(forcedState) {
   const badge = document.getElementById("syncStatus");
   const setupBtn = document.getElementById("openSyncSetupBtn");
   if (!badge) return;
+  if (window.__apiStorageMode) {
+    setupBtn?.classList.add("hidden");
+    document.getElementById("syncBanner")?.classList.add("hidden");
+    if (forcedState === "error") {
+      badge.className = "sync-status sync-status-error";
+      badge.textContent = t("sync.label.error");
+      badge.title = t("sync.status.error");
+      return;
+    }
+    if (forcedState === "online") {
+      badge.className = "sync-status sync-status-on";
+      badge.textContent = t("sync.label.pg");
+      badge.title = t("sync.status.pg");
+      return;
+    }
+    const online = await ApiStorage.ping();
+    if (online) {
+      badge.className = "sync-status sync-status-on";
+      badge.textContent = t("sync.label.pg");
+      badge.title = t("sync.status.pg");
+    } else {
+      badge.className = "sync-status sync-status-error";
+      badge.textContent = t("sync.label.error");
+      badge.title = t("sync.status.error");
+    }
+    return;
+  }
   if (typeof CloudSync === "undefined" || !CloudSync.isEnabled()) {
     badge.className = "sync-status sync-status-off";
     badge.textContent = t("sync.label.off");
@@ -374,10 +503,32 @@ let persistTimer = null;
 let persistInFlight = null;
 
 async function persistDataNow() {
-  const key = window.__secureStorageKey;
-  if (!key || typeof SecureStorage === "undefined") return;
   clearTimeout(persistTimer);
   persistTimer = null;
+  if (window.__apiStorageMode && typeof ApiStorage !== "undefined") {
+    try {
+      persistInFlight = ApiStorage.savePayload({ state, productCenters, languages });
+      const result = await persistInFlight;
+      apiLastUpdatedAt = result.updatedAt ?? apiLastUpdatedAt;
+      updateSyncStatus("online");
+    } catch (error) {
+      if (error instanceof Error && error.message === "api_conflict") {
+        await refreshFromApi();
+        showToast(t("toast.syncConflictReloaded"));
+      } else if (error instanceof Error && error.message === "api_unauthorized") {
+        showToast(t("toast.loadFailed"));
+        setTimeout(() => window.location.reload(), 800);
+      } else {
+        updateSyncStatus("error");
+        showToast(t("toast.syncFailed"));
+      }
+    } finally {
+      persistInFlight = null;
+    }
+    return;
+  }
+  const key = window.__secureStorageKey;
+  if (!key || typeof SecureStorage === "undefined") return;
   try {
     persistInFlight = SecureStorage.saveVault(key, { state, productCenters, languages });
     const result = await persistInFlight;
@@ -858,6 +1009,34 @@ function openGuideForm(guide = null) {
   $("#guideForm").elements.content.value = guide?.content ?? "";
 }
 
+function closeGuideViewModal() {
+  $("#guideViewModal")?.classList.add("hidden");
+}
+
+function openGuideViewModal(guide) {
+  const modal = $("#guideViewModal");
+  if (!modal || !guide) return;
+  $("#guideViewTitle").textContent = guide.title ?? "";
+  const body = $("#guideViewBody");
+  if (body) body.innerHTML = renderTextWithLinks(guide.content ?? "");
+  modal.classList.remove("hidden");
+}
+
+function guideCardBodyHtml(guide) {
+  const content = String(guide.content ?? "");
+  const isLong = content.length > GUIDE_PREVIEW_CHARS;
+  const expanded = expandedGuideContentIds.has(guide.id);
+  const text = isLong && !expanded ? `${content.slice(0, GUIDE_PREVIEW_CHARS)}...` : content;
+  return `
+    <div class="guide-card-body">${renderTextWithLinks(text)}</div>
+    ${
+      isLong
+        ? `<button type="button" class="text-button" data-action="toggle-guide-content" data-id="${guide.id}">${expanded ? t("guides.collapse") : t("guides.expand")}</button>`
+        : ""
+    }
+  `;
+}
+
 function renderGuides() {
   const list = $("#guideList");
   if (!list) return;
@@ -871,22 +1050,25 @@ function renderGuides() {
   });
   list.innerHTML = sortedGuides
     .map((guide) => {
-      const collapsed = collapsedGuideIds.has(guide.id);
-      const preview = guide.content.length > 160 ? `${guide.content.slice(0, 160)}...` : guide.content;
+      const folded = collapsedGuideIds.has(guide.id);
       const typeLabel = guide.type === "file" ? t("guides.typeUploaded", { file: guide.fileName }) : t("guides.typeCreated");
       const pinAction = guide.pinned ? "unpin-guide" : "pin-guide";
       const pinLabel = guide.pinned ? t("guides.unpin") : t("guides.pin");
+      const foldLabel = folded ? t("guides.unfoldCard") : t("guides.foldCard");
       return `
-        <article class="guide-card">
+        <article class="guide-card${guide.pinned ? " guide-card-pinned" : ""}">
           <div class="guide-card-head">
-            <button type="button" class="guide-title-button" data-action="toggle-guide-fold" data-id="${guide.id}" aria-expanded="${!collapsed}">${guide.title}</button>
-            <span class="guide-meta">${typeLabel} · ${guide.createdAt}</span>
+            <div class="guide-card-title-wrap">
+              <h3 class="guide-card-title">${escapeHtml(guide.title)}</h3>
+              <span class="guide-meta">${escapeHtml(typeLabel)} · ${escapeHtml(guide.createdAt)}</span>
+            </div>
+            <button type="button" class="text-button guide-fold-btn" data-action="toggle-guide-fold" data-id="${guide.id}" aria-expanded="${!folded}">${foldLabel}</button>
           </div>
-          <div class="guide-card-content ${collapsed ? "hidden" : ""}">
-            <p>${preview}</p>
-            <div class="row-actions">
+          <div class="guide-card-content ${folded ? "hidden" : ""}">
+            ${guideCardBodyHtml(guide)}
+            <div class="row-actions guide-card-actions">
+              <button type="button" data-action="view-guide" data-id="${guide.id}">${t("guides.viewFull")}</button>
               <button type="button" data-action="toggle-pin-guide" data-id="${guide.id}" data-pin-action="${pinAction}">${pinLabel}</button>
-              <button type="button" data-action="view-guide" data-id="${guide.id}">${t("common.view")}</button>
               <button type="button" data-action="edit-guide" data-id="${guide.id}">${t("common.edit")}</button>
               <button type="button" data-action="delete-guide" data-id="${guide.id}">${t("common.delete")}</button>
             </div>
@@ -1847,8 +2029,13 @@ document.addEventListener("click", (event) => {
     const id = Number(event.target.dataset.id);
     const guide = state.guides.find((item) => item.id === id);
     if (!guide) return;
-    openGuideForm(guide);
-    switchView("guides");
+    openGuideViewModal(guide);
+  }
+  if (action === "toggle-guide-content") {
+    const id = Number(event.target.dataset.id);
+    if (expandedGuideContentIds.has(id)) expandedGuideContentIds.delete(id);
+    else expandedGuideContentIds.add(id);
+    renderGuides();
   }
   if (action === "edit-guide") {
     const id = Number(event.target.dataset.id);
@@ -1871,6 +2058,7 @@ document.addEventListener("click", (event) => {
     state.guides = state.guides.filter((item) => item.id !== id);
     if (editingGuideId === id) closeGuideForm();
     collapsedGuideIds.delete(id);
+    expandedGuideContentIds.delete(id);
     persistData();
     renderGuides();
     showToast(t("toast.guideDeleted"));
@@ -2132,7 +2320,10 @@ $("#knowledgeForm").addEventListener("submit", (event) => {
 
 function startApp() {
   const launch = async () => {
-    if (window.__secureStorageKey) {
+    if (window.__apiStorageMode) {
+      await bootstrapApiData();
+      startApiPolling();
+    } else if (window.__secureStorageKey) {
       await bootstrapSecureData(window.__secureStorageKey);
       startCloudPolling(window.__secureStorageKey);
     }
@@ -2143,6 +2334,9 @@ function startApp() {
     switchView("dashboard");
     showAppShell();
     if (window.__cloudSyncOffline) {
+      showToast(t("toast.syncOffline"));
+    }
+    if (window.__apiStorageOffline) {
       showToast(t("toast.syncOffline"));
     }
   };
@@ -2158,6 +2352,11 @@ function bootApp() {
 }
 
 document.addEventListener("auth-ready", bootApp, { once: true });
+
+document.getElementById("closeGuideViewModal")?.addEventListener("click", closeGuideViewModal);
+document.getElementById("guideViewModal")?.addEventListener("click", (event) => {
+  if (event.target.id === "guideViewModal") closeGuideViewModal();
+});
 
 document.getElementById("openSyncSetupBtn")?.addEventListener("click", openSyncSetupModal);
 document.getElementById("openSyncBannerBtn")?.addEventListener("click", openSyncSetupModal);
